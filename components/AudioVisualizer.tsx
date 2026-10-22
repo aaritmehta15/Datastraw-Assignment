@@ -4,10 +4,9 @@ import { useEffect, useRef } from 'react';
 
 interface AudioVisualizerProps {
   state: 'idle' | 'listening' | 'thinking' | 'speaking';
-  audioStream?: MediaStream | null;
 }
 
-export default function AudioVisualizer({ state, audioStream }: AudioVisualizerProps) {
+export default function AudioVisualizer({ state }: AudioVisualizerProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
@@ -19,24 +18,6 @@ export default function AudioVisualizer({ state, audioStream }: AudioVisualizerP
     let animationId: number;
     let phase = 0;
 
-    let audioContext: AudioContext | null = null;
-    let analyser: AnalyserNode | null = null;
-    let dataArray: Uint8Array | null = null;
-
-    if (audioStream && state === 'listening') {
-      try {
-        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-        audioContext = new AudioCtx();
-        const source = audioContext.createMediaStreamSource(audioStream);
-        analyser = audioContext.createAnalyser();
-        analyser.fftSize = 64;
-        source.connect(analyser);
-        dataArray = new Uint8Array(analyser.frequencyBinCount);
-      } catch (e) {
-        console.warn('AudioContext init error:', e);
-      }
-    }
-
     const render = () => {
       const width = canvas.width;
       const height = canvas.height;
@@ -47,41 +28,40 @@ export default function AudioVisualizer({ state, audioStream }: AudioVisualizerP
 
       if (state === 'listening') {
         primaryColor = '#10B981';
-        glowColor = 'rgba(16, 185, 129, 0.4)';
+        glowColor = 'rgba(16, 185, 129, 0.5)';
       } else if (state === 'thinking') {
         primaryColor = '#F59E0B';
-        glowColor = 'rgba(245, 158, 11, 0.4)';
+        glowColor = 'rgba(245, 158, 11, 0.5)';
       } else if (state === 'speaking') {
         primaryColor = '#A78BFA';
-        glowColor = 'rgba(167, 139, 250, 0.5)';
+        glowColor = 'rgba(167, 139, 250, 0.6)';
       }
 
-      const barCount = 36;
+      const barCount = 38;
       const barWidth = Math.floor(width / (barCount * 1.5));
       const centerY = height / 2;
-
-      if (analyser && dataArray) {
-        analyser.getByteFrequencyData(dataArray as any);
-      }
 
       for (let i = 0; i < barCount; i++) {
         const x = i * (barWidth + 4) + (width - barCount * (barWidth + 4)) / 2;
 
         let barHeight = 4;
         if (state === 'listening') {
-          const freq = dataArray ? (dataArray[i % dataArray.length] / 255) : 0.2;
-          const dynamicFactor = Math.sin(phase + i * 0.3) * 0.3 + 0.7;
-          barHeight = Math.max(6, freq * height * 0.75 * dynamicFactor);
+          // Dynamic active ripple for user speaking
+          const wave1 = Math.sin(phase * 2.2 + i * 0.35);
+          const wave2 = Math.cos(phase * 1.4 - i * 0.2);
+          barHeight = Math.max(8, (Math.abs(wave1 * wave2) + 0.2) * (height * 0.7));
         } else if (state === 'thinking') {
-          const wave = Math.sin(phase * 1.5 + i * 0.35);
+          // Amber undulating wave
+          const wave = Math.sin(phase * 1.8 + i * 0.3);
           barHeight = Math.max(6, (wave * 0.5 + 0.5) * (height * 0.55));
         } else if (state === 'speaking') {
-          const wave = Math.sin(phase * 2 + i * 0.25) * Math.cos(phase + i * 0.1);
-          barHeight = Math.max(8, (Math.abs(wave) + 0.3) * (height * 0.65));
+          // Rich rhythmic voice modulation for Aria
+          const wave = Math.sin(phase * 2.5 + i * 0.28) * Math.cos(phase * 0.9 + i * 0.15);
+          barHeight = Math.max(10, (Math.abs(wave) + 0.35) * (height * 0.72));
         } else {
           // Idle breathing state
-          const wave = Math.sin(phase * 0.5 + i * 0.2);
-          barHeight = Math.max(4, (wave * 0.5 + 0.5) * 12);
+          const wave = Math.sin(phase * 0.6 + i * 0.2);
+          barHeight = Math.max(4, (wave * 0.5 + 0.5) * 14);
         }
 
         // Draw bar with rounded caps and glowing gradient
@@ -91,14 +71,14 @@ export default function AudioVisualizer({ state, audioStream }: AudioVisualizerP
 
         ctx.fillStyle = gradient;
         ctx.shadowColor = glowColor;
-        ctx.shadowBlur = 10;
+        ctx.shadowBlur = state === 'idle' ? 4 : 12;
 
         ctx.beginPath();
         ctx.roundRect(x, centerY - barHeight / 2, barWidth, barHeight, 4);
         ctx.fill();
       }
 
-      phase += 0.05;
+      phase += 0.045;
       animationId = requestAnimationFrame(render);
     };
 
@@ -106,11 +86,8 @@ export default function AudioVisualizer({ state, audioStream }: AudioVisualizerP
 
     return () => {
       cancelAnimationFrame(animationId);
-      if (audioContext && audioContext.state !== 'closed') {
-        audioContext.close().catch(() => {});
-      }
     };
-  }, [state, audioStream]);
+  }, [state]);
 
   return (
     <div style={{
