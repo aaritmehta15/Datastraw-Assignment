@@ -1,105 +1,120 @@
 'use client';
 
-import { Sparkles, Mic, ArrowRight } from 'lucide-react';
+import { Sparkles, ArrowRight, ShieldCheck, Zap, Headphones } from 'lucide-react';
 import Link from 'next/link';
+import CallCockpit from '@/components/CallCockpit';
 
 export default function HomePage() {
   return (
-    <div className="container" style={{ paddingTop: '40px' }}>
+    <div className="container" style={{ paddingTop: '36px' }}>
       {/* Hero Header */}
-      <div style={{ textAlign: 'center', maxWidth: '800px', margin: '0 auto 40px auto' }}>
+      <div style={{ textAlign: 'center', maxWidth: '820px', margin: '0 auto 36px auto' }}>
         <div style={{
           display: 'inline-flex',
           alignItems: 'center',
           gap: '8px',
-          padding: '6px 16px',
+          padding: '6px 18px',
           borderRadius: 'var(--radius-full)',
           background: 'rgba(212, 175, 55, 0.12)',
-          border: '1px solid rgba(212, 175, 55, 0.3)',
+          border: '1px solid rgba(212, 175, 55, 0.35)',
           color: 'var(--gold-light)',
           fontSize: '13px',
           fontWeight: 600,
-          marginBottom: '16px'
+          marginBottom: '16px',
+          boxShadow: '0 2px 10px rgba(212, 175, 55, 0.15)'
         }}>
           <Sparkles size={14} color="var(--gold-primary)" />
-          <span>Next-Generation AI Voice Support Agent</span>
+          <span>Aura Skincare • AI Voice Customer Experience Agent</span>
         </div>
 
         <h1 style={{
           fontFamily: 'var(--font-display)',
-          fontSize: '44px',
+          fontSize: '46px',
           fontWeight: 800,
           lineHeight: 1.15,
           color: '#FFFFFF',
           marginBottom: '16px'
         }}>
-          Meet <span style={{ color: 'var(--gold-primary)' }}>Aria</span> — Voice CX for <span style={{ color: '#6EE7B7' }}>Aura Skincare</span>
+          Meet <span style={{ color: 'var(--gold-primary)' }}>Aria</span> — Voice CX Specialist
         </h1>
 
         <p style={{
           fontSize: '17px',
           color: 'var(--text-secondary)',
-          lineHeight: 1.6
+          lineHeight: 1.6,
+          maxWidth: '680px',
+          margin: '0 auto'
         }}>
-          Speak naturally using your microphone. Aria answers brand questions, looks up real-time orders, enforces return and cancellation policies, and handles speech interruptions in a natural Indian accent.
+          Click <strong style={{ color: '#FFFFFF' }}>Start Call</strong> and speak naturally into your microphone. Aria answers brand policies, checks live order statuses, enforces return/cancellation rules, and responds in an authentic Indian voice with real-time barge-in.
         </p>
+
+        {/* Feature Badges */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          gap: '20px',
+          marginTop: '18px',
+          flexWrap: 'wrap',
+          fontSize: '13px',
+          color: 'var(--text-muted)'
+        }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Headphones size={14} color="var(--gold-primary)" />
+            <span>Indian English Voice Persona (en-IN)</span>
+          </span>
+          <span>•</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <ShieldCheck size={14} color="var(--emerald-accent)" />
+            <span>Deterministic Policy Guardrails</span>
+          </span>
+          <span>•</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Zap size={14} color="var(--status-thinking)" />
+            <span>Active Barge-In Interruption</span>
+          </span>
+        </div>
       </div>
 
-      {/* Voice Studio Placeholder - Will be wired with CallCockpit in Chunk 4 */}
-      <div className="glass-card" style={{ maxWidth: '860px', margin: '0 auto', textAlign: 'center', padding: '48px 32px' }}>
-        <div style={{
-          width: '90px',
-          height: '90px',
-          borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(212, 175, 55, 0.25) 0%, rgba(16, 75, 56, 0.5) 100%)',
-          border: '2px solid rgba(212, 175, 55, 0.4)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          margin: '0 auto 24px auto',
-          boxShadow: '0 0 35px rgba(212, 175, 55, 0.25)'
-        }}>
-          <Mic size={40} color="var(--gold-primary)" />
-        </div>
+      {/* Hero Live Voice Cockpit */}
+      <CallCockpit />
 
-        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '24px', fontWeight: 700, marginBottom: '12px', color: '#FFFFFF' }}>
-          Voice Studio Live Cockpit
-        </h2>
-        <p style={{ color: 'var(--text-secondary)', maxWidth: '520px', margin: '0 auto 28px auto', fontSize: '15px' }}>
-          Foundation Chunk 1 active. The full speech recognition loop, neural audio streaming, reactive waveform, and one-click evaluator chips are being mounted in sequence.
-        </p>
+      {/* Direct Quick Links to Multi-Page Suite */}
+      <div style={{
+        marginTop: '48px',
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+        gap: '16px'
+      }}>
+        <Link href="/orders" className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={{ fontSize: '15px', fontWeight: 700, color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span>Live Order Management</span>
+            <ArrowRight size={16} color="var(--gold-primary)" />
+          </div>
+          <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+            Inspect ORD-101, ORD-102, and ORD-103. Watch database status mutate live upon cancellation.
+          </p>
+        </Link>
 
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', flexWrap: 'wrap' }}>
-          <Link href="/orders" style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '12px 24px',
-            borderRadius: 'var(--radius-full)',
-            background: 'linear-gradient(135deg, #104B38 0%, #071912 100%)',
-            border: '1px solid rgba(212, 175, 55, 0.4)',
-            color: 'var(--gold-light)',
-            fontWeight: 600,
-            fontSize: '14px'
-          }}>
-            <span>Inspect Live Order Database</span>
-            <ArrowRight size={16} />
-          </Link>
-          <Link href="/policies" style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '12px 24px',
-            borderRadius: 'var(--radius-full)',
-            background: 'rgba(255, 255, 255, 0.05)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            color: 'var(--text-primary)',
-            fontWeight: 500,
-            fontSize: '14px'
-          }}>
-            <span>View Brand Guardrails</span>
-          </Link>
-        </div>
+        <Link href="/policies" className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={{ fontSize: '15px', fontWeight: 700, color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span>Brand Knowledge Hub</span>
+            <ArrowRight size={16} color="var(--gold-primary)" />
+          </div>
+          <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+            Review Aura&apos;s shipping rules, 7-day return policy, 48h damaged window, and COD rules.
+          </p>
+        </Link>
+
+        <Link href="/architecture" className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={{ fontSize: '15px', fontWeight: 700, color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span>System Architecture Dossier</span>
+            <ArrowRight size={16} color="var(--gold-primary)" />
+          </div>
+          <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+            Detailed breakdown of voice pipeline, latency budget, and answers to Section 9 questions.
+          </p>
+        </Link>
       </div>
     </div>
   );
