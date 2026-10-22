@@ -18,12 +18,12 @@ export default function CallCockpit() {
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
   const [hasMicPermission, setHasMicPermission] = useState<boolean | null>(null);
   const [micStream, setMicStream] = useState<MediaStream | null>(null);
-  const [voiceMode, setVoiceMode] = useState<'cloud-indian' | 'browser-indian'>('cloud-indian');
   const [isPlayingTest, setIsPlayingTest] = useState(false);
 
   const recognitionRef = useRef<any>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+  const playPromiseRef = useRef<Promise<void> | null>(null);
   const isCallActiveRef = useRef(isCallActive);
   isCallActiveRef.current = isCallActive;
 
@@ -41,118 +41,89 @@ export default function CallCockpit() {
     };
   }, [isCallActive]);
 
-  // Stop any active audio (Barge-in / Ducking)
+  // Cleanly stop any active audio playback without AbortError cascades
   const stopAllAudio = () => {
-    if (currentAudioRef.current) {
-      currentAudioRef.current.pause();
-      currentAudioRef.current.currentTime = 0;
+    const audio = currentAudioRef.current;
+    if (audio) {
+      // If a play promise is pending, wait for it before calling pause
+      if (playPromiseRef.current) {
+        playPromiseRef.current
+          .then(() => {
+            audio.pause();
+            audio.currentTime = 0;
+          })
+          .catch(() => {});
+      } else {
+        audio.pause();
+        audio.currentTime = 0;
+      }
       currentAudioRef.current = null;
+      playPromiseRef.current = null;
     }
+
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
   };
 
-  // Get strictly female Indian / English browser voice as fallback
-  const getFemaleFallbackVoice = () => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return null;
-    const voices = window.speechSynthesis.getVoices();
-
-    // 1. Strict Indian English female voice
-    const indianFemale = voices.find(v =>
-      (v.lang.toLowerCase().includes('en-in') || v.lang.toLowerCase().includes('hi-in')) &&
-      !v.name.toLowerCase().includes('david') &&
-      !v.name.toLowerCase().includes('male') &&
-      !v.name.toLowerCase().includes('ravi')
-    );
-    if (indianFemale) return indianFemale;
-
-    // 2. Any explicit female voice
-    const femaleVoice = voices.find(v =>
-      v.name.toLowerCase().includes('zira') ||
-      v.name.toLowerCase().includes('female') ||
-      v.name.toLowerCase().includes('sita') ||
-      v.name.toLowerCase().includes('swara') ||
-      v.name.toLowerCase().includes('natural')
-    );
-    if (femaleVoice) return femaleVoice;
-
-    // 3. Any non-male English voice
-    return voices.find(v => v.lang.startsWith('en') && !v.name.toLowerCase().includes('david')) || null;
-  };
-
-  // Main Speech Synthesis Router (Cloud Indian Female Voice as Primary)
+  // Aria Indian Voice Player (Cloud Neural Audio via /api/tts)
   const speakAria = (text: string, onComplete?: () => void) => {
     stopAllAudio();
+
+    // Temporarily pause speech recognition while Aria speaks to prevent speaker echo
+    if (recognitionRef.current) {
+      try { recognitionRef.current.abort(); } catch (_) {}
+    }
+
     setCallState('speaking');
 
-    if (voiceMode === 'cloud-indian') {
-      // Primary: Authentic Indian English Female Neural Audio via /api/tts
-      const audioUrl = `/api/tts?text=${encodeURIComponent(text)}`;
-      const audio = new Audio(audioUrl);
-      currentAudioRef.current = audio;
+    const audioUrl = `/api/tts?text=${encodeURIComponent(text)}`;
+    const audio = new Audio(audioUrl);
+    currentAudioRef.current = audio;
 
-      audio.onended = () => {
-        currentAudioRef.current = null;
-        if (isCallActiveRef.current) {
-          setCallState('listening');
-          startSpeechRecognition();
-        } else {
-          setCallState('idle');
+    audio.onended = () => {
+      currentAudioRef.current = null;
+      playPromiseRef.current = null;
+
+      if (isCallActiveRef.current) {
+        setCallState('listening');
+        // Resume listening after 200ms quiet buffer
+        setTimeout(() => {
+          if (isCallActiveRef.current) startSpeechRecognition();
+        }, 200);
+      } else {
+        setCallState('idle');
+      }
+
+      if (onComplete) onComplete();
+    };
+
+    audio.onerror = (e) => {
+      console.warn('Audio playback error, resuming listener:', e);
+      currentAudioRef.current = null;
+      playPromiseRef.current = null;
+
+      if (isCallActiveRef.current) {
+        setCallState('listening');
+        startSpeechRecognition();
+      } else {
+        setCallState('idle');
+      }
+      if (onComplete) onComplete();
+    };
+
+    // Safely execute play() tracking promise
+    const promise = audio.play();
+    if (promise !== undefined) {
+      playPromiseRef.current = promise;
+      promise.catch((err) => {
+        // If pause() was intentionally called (e.g., Barge-in or stop test), don't treat as error
+        if (err.name === 'AbortError') {
+          return;
         }
-        if (onComplete) onComplete();
-      };
-
-      audio.onerror = (e) => {
-        console.warn('Cloud TTS error, falling back to browser female voice:', e);
-        speakViaBrowser(text, onComplete);
-      };
-
-      audio.play().catch((err) => {
-        console.warn('Audio play was prevented or interrupted:', err);
-        speakViaBrowser(text, onComplete);
+        console.warn('Audio play error:', err);
       });
-    } else {
-      speakViaBrowser(text, onComplete);
     }
-  };
-
-  // Browser SpeechSynthesis strictly tuned for female Indian persona
-  const speakViaBrowser = (text: string, onComplete?: () => void) => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) {
-      if (onComplete) onComplete();
-      return;
-    }
-
-    const utterance = new SpeechSynthesisUtterance(text);
-    const femaleVoice = getFemaleFallbackVoice();
-    if (femaleVoice) {
-      utterance.voice = femaleVoice;
-    }
-    utterance.lang = 'en-IN';
-    utterance.pitch = 1.18; // Elevated pitch for guaranteed feminine tone
-    utterance.rate = 1.0;
-
-    utterance.onend = () => {
-      if (isCallActiveRef.current) {
-        setCallState('listening');
-        startSpeechRecognition();
-      } else {
-        setCallState('idle');
-      }
-      if (onComplete) onComplete();
-    };
-
-    utterance.onerror = () => {
-      if (isCallActiveRef.current) {
-        setCallState('listening');
-        startSpeechRecognition();
-      } else {
-        setCallState('idle');
-      }
-    };
-
-    window.speechSynthesis.speak(utterance);
   };
 
   // Test Aria Voice Sample
@@ -174,6 +145,11 @@ export default function CallCockpit() {
   // Start continuous speech recognition with en-IN
   const startSpeechRecognition = () => {
     if (typeof window === 'undefined') return;
+
+    // Do not start mic recognition if Aria is actively speaking (prevents speaker echo)
+    if (currentAudioRef.current && !currentAudioRef.current.paused) {
+      return;
+    }
 
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
@@ -231,7 +207,7 @@ export default function CallCockpit() {
       };
 
       recognition.onend = () => {
-        // Automatically resume listening if call is still active and not speaking
+        // Automatically resume listening if call is still active and Aria is not speaking
         if (isCallActiveRef.current && callState !== 'speaking' && callState !== 'thinking') {
           try {
             recognition.start();
@@ -306,6 +282,9 @@ export default function CallCockpit() {
 
   // Start Call
   const handleStartCall = async () => {
+    stopAllAudio();
+    setIsPlayingTest(false);
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       setMicStream(stream);
@@ -329,6 +308,7 @@ export default function CallCockpit() {
     };
     setTranscript([initialTurn]);
 
+    // Speak greeting first, then start listening once she finishes
     speakAria(greeting, () => {
       startSpeechRecognition();
     });
@@ -418,31 +398,26 @@ export default function CallCockpit() {
             </span>
           </div>
 
-          {/* Voice Selector & Test Button */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          {/* Voice Profile & Interactive Voice Tester */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', fontWeight: 600, color: isCallActive ? 'var(--gold-primary)' : 'var(--text-secondary)' }}>
               ⏱️ {formatDuration(duration)}
             </span>
 
-            <select
-              value={voiceMode}
-              onChange={(e) => setVoiceMode(e.target.value as any)}
-              disabled={isCallActive}
-              style={{
-                background: 'rgba(7, 25, 18, 0.9)',
-                border: '1px solid var(--gold-primary)',
-                borderRadius: 'var(--radius-full)',
-                color: 'var(--gold-light)',
-                padding: '6px 12px',
-                fontSize: '12px',
-                fontWeight: 600,
-                cursor: isCallActive ? 'not-allowed' : 'pointer',
-                outline: 'none'
-              }}
-            >
-              <option value="cloud-indian">✨ Aria (Indian Female Voice - en-IN)</option>
-              <option value="browser-indian">🗣️ Local Browser Voice</option>
-            </select>
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 12px',
+              borderRadius: 'var(--radius-full)',
+              background: 'rgba(212, 175, 55, 0.12)',
+              border: '1px solid var(--gold-primary)',
+              fontSize: '12px',
+              color: 'var(--gold-light)',
+              fontWeight: 600
+            }}>
+              <span>🇮🇳 Aria (Indian Female Voice)</span>
+            </div>
 
             <button
               onClick={handleTestVoice}
@@ -454,17 +429,18 @@ export default function CallCockpit() {
                 gap: '6px',
                 padding: '6px 14px',
                 borderRadius: 'var(--radius-full)',
-                background: isPlayingTest ? 'var(--emerald-accent)' : 'rgba(212, 175, 55, 0.2)',
+                background: isPlayingTest ? 'var(--emerald-accent)' : 'rgba(212, 175, 55, 0.25)',
                 border: '1px solid var(--gold-primary)',
-                color: isPlayingTest ? '#071912' : 'var(--gold-light)',
+                color: isPlayingTest ? '#071912' : '#FFFFFF',
                 fontSize: '12px',
                 fontWeight: 700,
                 cursor: isCallActive ? 'not-allowed' : 'pointer',
-                transition: 'all 0.2s ease'
+                transition: 'all 0.2s ease',
+                boxShadow: isPlayingTest ? '0 0 15px rgba(16, 185, 129, 0.5)' : 'none'
               }}
             >
               {isPlayingTest ? <VolumeX size={14} /> : <Volume2 size={14} />}
-              <span>{isPlayingTest ? 'Stop Sample' : 'Test Voice'}</span>
+              <span>{isPlayingTest ? 'Stop Sample' : '🔊 Test Voice'}</span>
             </button>
           </div>
         </div>
@@ -489,7 +465,8 @@ export default function CallCockpit() {
                 fontWeight: 700,
                 boxShadow: '0 8px 30px rgba(16, 185, 129, 0.4)',
                 border: '1px solid rgba(255, 255, 255, 0.2)',
-                transition: 'all 0.2s ease'
+                transition: 'all 0.2s ease',
+                cursor: 'pointer'
               }}
             >
               <Phone size={20} />
@@ -510,7 +487,8 @@ export default function CallCockpit() {
                 fontWeight: 700,
                 boxShadow: '0 8px 30px rgba(239, 68, 68, 0.4)',
                 border: '1px solid rgba(255, 255, 255, 0.2)',
-                transition: 'all 0.2s ease'
+                transition: 'all 0.2s ease',
+                cursor: 'pointer'
               }}
             >
               <PhoneOff size={20} />
@@ -531,7 +509,8 @@ export default function CallCockpit() {
                 border: '1px solid var(--gold-primary)',
                 color: 'var(--gold-light)',
                 fontSize: '14px',
-                fontWeight: 600
+                fontWeight: 600,
+                cursor: 'pointer'
               }}
             >
               <Sparkles size={16} />
@@ -561,7 +540,7 @@ export default function CallCockpit() {
         onSelectScenario={(prompt) => {
           if (!isCallActive) {
             handleStartCall().then(() => {
-              setTimeout(() => processUserUtterance(prompt), 1200);
+              setTimeout(() => processUserUtterance(prompt), 1400);
             });
           } else {
             processUserUtterance(prompt);
