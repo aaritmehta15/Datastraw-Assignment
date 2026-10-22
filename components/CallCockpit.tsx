@@ -1,16 +1,39 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { Phone, PhoneOff, Mic, Volume2, Sparkles, AlertCircle, VolumeX } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Phone, PhoneOff, Volume2, Sparkles, AlertCircle, VolumeX } from 'lucide-react';
 import AudioVisualizer from './AudioVisualizer';
 import TranscriptStream from './TranscriptStream';
 import EvaluatorQuickTest from './EvaluatorQuickTest';
 import PostCallModal from './PostCallModal';
 import { CallTranscriptTurn, StructuredCallSummary } from '@/lib/types';
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  VOICE FLOW (mouth → ear):
+//
+//  USER speaks → [Mic] → SpeechRecognition (en-IN) → onresult (final)
+//    → stopAllAudio()                          ← barge-in: stop Aria immediately
+//    → setCallState('thinking')
+//    → POST /api/chat                          ← Groq LLM + tool calling
+//    → setCallState('speaking')
+//    → GET /api/tts?text=...                   ← MsEdgeTTS en-IN-NeerjaNeural
+//    → audio.play()                            ← browser <Audio> plays MP3
+//    → audio.onended
+//    → setTimeout(400ms)                       ← Chrome audio hardware settle
+//    → recognition.start()                     ← mic back ON
+//    → setCallState('listening')
+//
+//  Barge-in: if user speaks while Aria speaks →
+//    SpeechRecognition.onresult (interim ≥ 4 chars)
+//    → stopAllAudio() → callState = 'listening'
+// ─────────────────────────────────────────────────────────────────────────────
+
+type CallState = 'idle' | 'listening' | 'thinking' | 'speaking';
+
 export default function CallCockpit() {
+  // ── UI State ──────────────────────────────────────────────────────────────
   const [isCallActive, setIsCallActive] = useState(false);
-  const [callState, _setCallState] = useState<'idle' | 'listening' | 'thinking' | 'speaking'>('idle');
+  const [callState, setCallState] = useState<CallState>('idle');
   const [duration, setDuration] = useState(0);
   const [transcript, setTranscript] = useState<CallTranscriptTurn[]>([]);
   const [interimText, setInterimText] = useState('');
@@ -20,517 +43,480 @@ export default function CallCockpit() {
   const [micStream, setMicStream] = useState<MediaStream | null>(null);
   const [isPlayingTest, setIsPlayingTest] = useState(false);
 
-  const recognitionRef = useRef<any>(null);
+  // ── Refs (never cause re-renders; safe to read inside callbacks) ──────────
+  const isCallActiveRef = useRef(false);        // tracks call active without stale closure
+  const callStateRef = useRef<CallState>('idle'); // sync mirror of callState
+  const recognitionRef = useRef<any>(null);       // SpeechRecognition instance
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null); // playing <audio>
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
-  const isCallActiveRef = useRef(isCallActive);
-  isCallActiveRef.current = isCallActive;
+  const shouldBeListeningRef = useRef(false);     // master flag: should mic be on?
+  const transcriptRef = useRef<CallTranscriptTurn[]>([]); // sync mirror of transcript
+  const voicesRef = useRef<SpeechSynthesisVoice[]>([]);   // cached browser voices
 
-  // Synchronous state ref to prevent stale closure bugs in onend / onresult callbacks
-  const callStateRef = useRef<'idle' | 'listening' | 'thinking' | 'speaking'>('idle');
-  const setCallState = (newState: 'idle' | 'listening' | 'thinking' | 'speaking') => {
-    callStateRef.current = newState;
-    _setCallState(newState);
-  };
-
-  // Browser speech synthesis voices cache
-  const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
-  useEffect(() => {
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      const loadVoices = () => {
-        const v = window.speechSynthesis.getVoices();
-        if (v && v.length > 0) {
-          voicesRef.current = v;
-        }
-      };
-      loadVoices();
-      window.speechSynthesis.onvoiceschanged = loadVoices;
-    }
+  // Keep refs in sync with state
+  const syncSetCallState = useCallback((s: CallState) => {
+    callStateRef.current = s;
+    setCallState(s);
   }, []);
 
-  // Active call duration timer
+  // ── Voice pre-cache ───────────────────────────────────────────────────────
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    const load = () => {
+      const v = window.speechSynthesis.getVoices();
+      if (v && v.length > 0) voicesRef.current = v;
+    };
+    load();
+    window.speechSynthesis.onvoiceschanged = load;
+  }, []);
+
+  // ── Call duration timer ───────────────────────────────────────────────────
   useEffect(() => {
     if (isCallActive) {
-      timerRef.current = setInterval(() => {
-        setDuration(prev => prev + 1);
-      }, 1000);
+      timerRef.current = setInterval(() => setDuration(d => d + 1), 1000);
     } else {
       if (timerRef.current) clearInterval(timerRef.current);
     }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [isCallActive]);
 
-  // Cleanly stop any ongoing audio immediately
-  const stopAllAudio = () => {
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  STEP 1 — STOP AUDIO (instant)
+  // ═══════════════════════════════════════════════════════════════════════════
+  const stopAllAudio = useCallback(() => {
     if (currentAudioRef.current) {
       try {
         currentAudioRef.current.pause();
-        currentAudioRef.current.currentTime = 0;
+        currentAudioRef.current.src = '';  // forces release on Chrome
       } catch (_) {}
       currentAudioRef.current = null;
     }
+    try { window.speechSynthesis?.cancel(); } catch (_) {}
+  }, []);
 
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      try {
-        window.speechSynthesis.cancel();
-      } catch (_) {}
-    }
-  };
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  STEP 2 — START MIC (with 400ms settle window after audio ends)
+  // ═══════════════════════════════════════════════════════════════════════════
+  const startListening = useCallback(() => {
+    if (!isCallActiveRef.current) return;
+    if (!shouldBeListeningRef.current) return;
 
-  // Browser SpeechSynthesis strictly tuned for female Indian persona (Fallback)
-  const speakViaBrowser = (text: string, onComplete?: () => void) => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) {
-      if (onComplete) onComplete();
+    // Do not start if audio is still playing (hardware lock)
+    if (currentAudioRef.current && !currentAudioRef.current.paused) return;
+
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) {
+      console.warn('[Voice] SpeechRecognition not supported in this browser');
       return;
     }
 
-    try {
-      window.speechSynthesis.cancel();
-
-      setTimeout(() => {
-        try {
-          const utterance = new SpeechSynthesisUtterance(text);
-          const availableVoices = voicesRef.current.length > 0
-            ? voicesRef.current
-            : window.speechSynthesis.getVoices();
-
-          // 1. First priority: Indian female voice
-          const femaleIndian = availableVoices.find(v =>
-            (v.lang.toLowerCase().includes('en-in') || v.lang.toLowerCase().includes('hi-in')) &&
-            (v.name.toLowerCase().includes('heera') ||
-             v.name.toLowerCase().includes('neerja') ||
-             v.name.toLowerCase().includes('swara') ||
-             v.name.toLowerCase().includes('female') ||
-             !v.name.toLowerCase().includes('david'))
-          );
-
-          // 2. Second priority: Any en-IN voice
-          const anyIndian = availableVoices.find(v => v.lang.toLowerCase().includes('en-in'));
-
-          // 3. Third priority: Any natural female voice
-          const generalFemale = availableVoices.find(v =>
-            (v.name.toLowerCase().includes('zira') ||
-             v.name.toLowerCase().includes('female') ||
-             v.name.toLowerCase().includes('natural') ||
-             v.name.toLowerCase().includes('google uk english female')) &&
-            !v.name.toLowerCase().includes('david') &&
-            !v.name.toLowerCase().includes('male')
-          );
-
-          const chosen = femaleIndian || anyIndian || generalFemale;
-          if (chosen) utterance.voice = chosen;
-
-          utterance.lang = 'en-IN';
-          utterance.pitch = 1.05;
-          utterance.rate = 1.0;
-
-          utterance.onend = () => {
-            if (isCallActiveRef.current) {
-              setCallState('listening');
-              setTimeout(() => {
-                if (isCallActiveRef.current) startSpeechRecognition();
-              }, 100);
-            } else {
-              setCallState('idle');
-            }
-            if (onComplete) onComplete();
-          };
-
-          utterance.onerror = () => {
-            if (isCallActiveRef.current) {
-              setCallState('listening');
-              setTimeout(() => {
-                if (isCallActiveRef.current) startSpeechRecognition();
-              }, 100);
-            } else {
-              setCallState('idle');
-            }
-            if (onComplete) onComplete();
-          };
-
-          window.speechSynthesis.speak(utterance);
-        } catch (e) {
-          console.warn('SpeechSynthesis error:', e);
-          if (onComplete) onComplete();
-        }
-      }, 50);
-    } catch (e) {
-      console.warn('Browser speech cancel error:', e);
-      if (onComplete) onComplete();
-    }
-  };
-
-  // Aria Indian Voice Player (Cloud Neural Audio via /api/tts)
-  const speakAria = (text: string, onComplete?: () => void) => {
-    stopAllAudio();
-
+    // Abort any stale instance first
     if (recognitionRef.current) {
       try { recognitionRef.current.abort(); } catch (_) {}
-    }
-
-    setCallState('speaking');
-
-    const audioUrl = `/api/tts?text=${encodeURIComponent(text)}`;
-    const audio = new Audio();
-    audio.src = audioUrl;
-    audio.volume = 1.0;
-    currentAudioRef.current = audio;
-
-    let hasCleanedUp = false;
-    const cleanupAndNext = () => {
-      if (hasCleanedUp) return;
-      hasCleanedUp = true;
-      currentAudioRef.current = null;
-      if (isCallActiveRef.current) {
-        setCallState('listening');
-        setTimeout(() => {
-          if (isCallActiveRef.current) startSpeechRecognition();
-        }, 150);
-      } else {
-        setCallState('idle');
-      }
-      if (onComplete) onComplete();
-    };
-
-    audio.onended = cleanupAndNext;
-
-    audio.onerror = (e) => {
-      console.warn('Audio stream error, falling back to browser female voice:', e);
-      currentAudioRef.current = null;
-      speakViaBrowser(text, onComplete);
-    };
-
-    const promise = audio.play();
-    if (promise !== undefined) {
-      promise.catch((err) => {
-        if (err.name === 'AbortError') return;
-        console.warn('Audio play prevented or interrupted, falling back to browser voice:', err);
-        speakViaBrowser(text, onComplete);
-      });
-    }
-  };
-
-  // Test Aria Voice Sample
-  const handleTestVoice = () => {
-    if (isPlayingTest) {
-      stopAllAudio();
-      setIsPlayingTest(false);
-      setCallState('idle');
-      return;
-    }
-
-    stopAllAudio();
-    setIsPlayingTest(true);
-    const sample = "Namaste! I am Aria from Aura Skincare. How can I assist you with your order today?";
-    speakAria(sample, () => {
-      setIsPlayingTest(false);
-      setCallState('idle');
-    });
-  };
-
-  // Start continuous speech recognition with en-IN
-  const startSpeechRecognition = () => {
-    if (typeof window === 'undefined') return;
-
-    if (currentAudioRef.current && !currentAudioRef.current.paused) {
-      return;
-    }
-
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      console.warn('SpeechRecognition API not supported in this browser.');
-      return;
+      recognitionRef.current = null;
     }
 
     try {
-      if (recognitionRef.current) {
-        try { recognitionRef.current.abort(); } catch (_) {}
-      }
+      const rec = new SR();
+      rec.continuous = true;
+      rec.interimResults = true;
+      rec.lang = 'en-IN';
+      rec.maxAlternatives = 1;
 
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = 'en-IN';
-
-      recognition.onstart = () => {
+      rec.onstart = () => {
         setHasMicPermission(true);
+        syncSetCallState('listening');
       };
 
-      // Section 8 Barge-in: only interrupt if actual words are spoken, not background mic noise
-      recognition.onresult = (event: any) => {
+      // ── BARGE-IN: user speaks while Aria is talking ──
+      rec.onresult = (event: any) => {
         let interim = '';
-        let finalUtterance = '';
-
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) {
-            finalUtterance += event.results[i][0].transcript;
-          } else {
-            interim += event.results[i][0].transcript;
-          }
+        let final = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const t = event.results[i][0].transcript;
+          if (event.results[i].isFinal) final += t;
+          else interim += t;
         }
 
-        // Barge-in active check
-        if (callStateRef.current === 'speaking' && (interim.trim().length > 3 || finalUtterance.trim().length > 0)) {
+        // Barge-in trigger: real words detected while Aria speaks
+        if (callStateRef.current === 'speaking' && (interim.trim().length >= 4 || final.trim().length > 0)) {
           stopAllAudio();
-          setCallState('listening');
+          syncSetCallState('listening');
         }
 
         setInterimText(interim);
 
-        if (finalUtterance.trim().length > 0) {
+        if (final.trim().length > 0) {
           setInterimText('');
-          processUserUtterance(finalUtterance.trim());
+          processUserUtterance(final.trim());
         }
       };
 
-      recognition.onerror = (event: any) => {
-        if (event.error === 'not-allowed') {
-          setHasMicPermission(false);
-        }
-        if (event.error !== 'no-speech' && event.error !== 'aborted') {
-          console.warn('SpeechRecognition error:', event.error);
-        }
-      };
-
-      recognition.onend = () => {
-        // Only restart if call is still active and we are in 'listening' mode (not speaking, not thinking)
-        if (isCallActiveRef.current && callStateRef.current === 'listening') {
-          try {
-            recognition.start();
-          } catch (_) {}
+      rec.onerror = (e: any) => {
+        if (e.error === 'not-allowed') setHasMicPermission(false);
+        // 'no-speech', 'aborted', 'network' are non-fatal
+        if (e.error !== 'no-speech' && e.error !== 'aborted') {
+          console.warn('[Voice] SpeechRecognition error:', e.error);
         }
       };
 
-      recognition.start();
-      recognitionRef.current = recognition;
-    } catch (e) {
-      console.warn('Error starting speech recognition:', e);
+      // Auto-restart if call is still active and mic should be on
+      rec.onend = () => {
+        if (isCallActiveRef.current && shouldBeListeningRef.current && callStateRef.current === 'listening') {
+          setTimeout(() => {
+            if (isCallActiveRef.current && shouldBeListeningRef.current) {
+              try { rec.start(); } catch (_) {}
+            }
+          }, 300);
+        }
+      };
+
+      rec.start();
+      recognitionRef.current = rec;
+    } catch (err) {
+      console.warn('[Voice] Failed to start recognition:', err);
     }
-  };
+  }, [stopAllAudio, syncSetCallState]);
 
-  // Process customer speech turn through /api/chat
-  const processUserUtterance = async (text: string) => {
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  STEP 3 — SPEAK via /api/tts (en-IN-NeerjaNeural neural voice)
+  //  Flow: fetch blob → ObjectURL → <Audio>.play() → onended → settle → mic
+  // ═══════════════════════════════════════════════════════════════════════════
+  const speakAria = useCallback((text: string, onComplete?: () => void) => {
+    // Stop mic and any current audio first
+    shouldBeListeningRef.current = false;
+    if (recognitionRef.current) {
+      try { recognitionRef.current.abort(); } catch (_) {}
+      recognitionRef.current = null;
+    }
+    stopAllAudio();
+    syncSetCallState('speaking');
+
+    const url = `/api/tts?text=${encodeURIComponent(text)}`;
+    const audio = new Audio();
+    currentAudioRef.current = audio;
+
+    let settled = false;
+    const afterAudio = () => {
+      if (settled) return;
+      settled = true;
+      currentAudioRef.current = null;
+
+      if (onComplete) onComplete();
+
+      if (isCallActiveRef.current) {
+        // 400ms settle window: Chrome audio hardware needs to release
+        setTimeout(() => {
+          if (isCallActiveRef.current) {
+            shouldBeListeningRef.current = true;
+            startListening();
+          }
+        }, 400);
+      } else {
+        syncSetCallState('idle');
+      }
+    };
+
+    audio.onended = afterAudio;
+
+    audio.onerror = () => {
+      console.warn('[Voice] /api/tts audio failed, using browser fallback');
+      currentAudioRef.current = null;
+      speakViaBrowser(text, onComplete);
+    };
+
+    // Fetch as blob first → ObjectURL → play (avoids src streaming issues)
+    fetch(url)
+      .then(res => {
+        if (!res.ok) throw new Error(`TTS HTTP ${res.status}`);
+        return res.blob();
+      })
+      .then(blob => {
+        const objUrl = URL.createObjectURL(blob);
+        audio.src = objUrl;
+        audio.volume = 1.0;
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(err => {
+            if (err.name === 'AbortError') return; // user navigated away
+            console.warn('[Voice] audio.play() blocked:', err.name, '— using browser fallback');
+            URL.revokeObjectURL(objUrl);
+            speakViaBrowser(text, onComplete);
+          });
+        }
+        // Clean up ObjectURL after audio ends to avoid memory leak
+        audio.addEventListener('ended', () => URL.revokeObjectURL(objUrl), { once: true });
+      })
+      .catch(err => {
+        console.warn('[Voice] TTS fetch failed:', err, '— using browser fallback');
+        speakViaBrowser(text, onComplete);
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stopAllAudio, syncSetCallState, startListening]);
+
+  // ── Browser SpeechSynthesis fallback (female Indian voice) ────────────────
+  const speakViaBrowser = useCallback((text: string, onComplete?: () => void) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) {
+      if (onComplete) onComplete();
+      return;
+    }
+    try {
+      window.speechSynthesis.cancel();
+      setTimeout(() => {
+        const utt = new SpeechSynthesisUtterance(text);
+        const voices = voicesRef.current.length > 0 ? voicesRef.current : window.speechSynthesis.getVoices();
+        const pick =
+          voices.find(v => v.lang.includes('en-IN') && (v.name.includes('Heera') || v.name.includes('Neerja'))) ||
+          voices.find(v => v.lang.includes('en-IN')) ||
+          voices.find(v => v.name.toLowerCase().includes('zira'));
+        if (pick) utt.voice = pick;
+        utt.lang = 'en-IN';
+        utt.pitch = 1.05;
+        utt.rate = 1.0;
+        utt.onend = utt.onerror = () => {
+          if (onComplete) onComplete();
+          if (isCallActiveRef.current) {
+            setTimeout(() => {
+              shouldBeListeningRef.current = true;
+              startListening();
+            }, 400);
+          } else {
+            syncSetCallState('idle');
+          }
+        };
+        window.speechSynthesis.speak(utt);
+      }, 80);
+    } catch (_) { if (onComplete) onComplete(); }
+  }, [startListening, syncSetCallState]);
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  STEP 4 — PROCESS USER SPEECH → LLM → ARIA SPEAKS
+  // ═══════════════════════════════════════════════════════════════════════════
+  const processUserUtterance = useCallback(async (text: string) => {
     if (!text.trim()) return;
 
+    shouldBeListeningRef.current = false;
     stopAllAudio();
-    setCallState('thinking');
+    syncSetCallState('thinking');
 
     const userTurn: CallTranscriptTurn = {
       id: `turn-${Date.now()}-user`,
       speaker: 'customer',
-      text: text,
-      timestamp: new Date().toLocaleTimeString('en-IN')
+      text,
+      timestamp: new Date().toLocaleTimeString('en-IN'),
     };
 
-    const updatedTranscript = [...transcript, userTurn];
-    setTranscript(updatedTranscript);
+    const nextTranscript = [...transcriptRef.current, userTurn];
+    transcriptRef.current = nextTranscript;
+    setTranscript(nextTranscript);
 
     try {
-      const messages = updatedTranscript.map(t => ({
+      const messages = nextTranscript.map(t => ({
         role: t.speaker === 'customer' ? 'user' : 'assistant',
-        content: t.text
+        content: t.text,
       }));
 
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages, userMessage: text })
+        body: JSON.stringify({ messages, userMessage: text }),
       });
 
       const data = await res.json();
-      const ariaReply = data.message || "I am checking your order right now.";
+      const reply = data.message || 'I am checking that for you right now.';
 
       const ariaTurn: CallTranscriptTurn = {
         id: `turn-${Date.now()}-aria`,
         speaker: 'aria',
-        text: ariaReply,
+        text: reply,
         timestamp: new Date().toLocaleTimeString('en-IN'),
-        toolCalls: data.toolCalls
+        toolCalls: data.toolCalls,
       };
 
-      setTranscript(prev => [...prev, ariaTurn]);
-      speakAria(ariaReply);
-    } catch (error) {
-      console.error('Chat error:', error);
-      const fallbackReply = "I experienced a brief connection delay. Could you please repeat that?";
-      setTranscript(prev => [
-        ...prev,
-        {
-          id: `turn-${Date.now()}-aria`,
-          speaker: 'aria',
-          text: fallbackReply,
-          timestamp: new Date().toLocaleTimeString('en-IN')
-        }
-      ]);
-      speakAria(fallbackReply);
-    }
-  };
+      const withAria = [...nextTranscript, ariaTurn];
+      transcriptRef.current = withAria;
+      setTranscript(withAria);
 
-  // Start Call (Instant user gesture activation)
-  const handleStartCall = () => {
+      speakAria(reply);
+    } catch (err) {
+      console.error('[Voice] Chat API error:', err);
+      const fallback = 'I experienced a brief connection delay. Could you please repeat that?';
+      const fallTurn: CallTranscriptTurn = {
+        id: `turn-${Date.now()}-aria`,
+        speaker: 'aria',
+        text: fallback,
+        timestamp: new Date().toLocaleTimeString('en-IN'),
+      };
+      const withFall = [...nextTranscript, fallTurn];
+      transcriptRef.current = withFall;
+      setTranscript(withFall);
+      speakAria(fallback);
+    }
+  }, [stopAllAudio, syncSetCallState, speakAria]);
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  START CALL (must remain synchronous — preserves browser user-gesture token)
+  // ═══════════════════════════════════════════════════════════════════════════
+  const handleStartCall = useCallback(() => {
     stopAllAudio();
     setIsPlayingTest(false);
 
-    // 1. Immediately activate call state (Zero UI lag)
+    isCallActiveRef.current = true;
     setIsCallActive(true);
     setDuration(0);
-    setTranscript([]);
+    setInterimText('');
     setSummary(null);
 
-    // 2. Request mic in background without blocking audio play
-    if (typeof navigator !== 'undefined' && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      navigator.mediaDevices.getUserMedia({ audio: true })
-        .then(stream => {
-          setMicStream(stream);
-          setHasMicPermission(true);
-        })
-        .catch(e => {
-          console.warn('Microphone permission info:', e);
-          setHasMicPermission(false);
-        });
-    }
-
-    // 3. Immediately queue greeting turn
-    const greeting = "Namaste! I am Aria from Aura Skincare. How can I assist you with your orders or skincare questions today?";
-    const initialTurn: CallTranscriptTurn = {
+    const greeting = 'Namaste! I am Aria from Aura Skincare. How can I help with your orders or skincare questions today?';
+    const firstTurn: CallTranscriptTurn = {
       id: `turn-${Date.now()}-init`,
       speaker: 'aria',
       text: greeting,
-      timestamp: new Date().toLocaleTimeString('en-IN')
+      timestamp: new Date().toLocaleTimeString('en-IN'),
     };
-    setTranscript([initialTurn]);
+    transcriptRef.current = [firstTurn];
+    setTranscript([firstTurn]);
 
-    // 4. Play greeting within user gesture
-    speakAria(greeting, () => {
-      startSpeechRecognition();
-    });
-  };
+    // Request mic in background (getUserMedia must NOT block speakAria)
+    navigator.mediaDevices?.getUserMedia({ audio: true })
+      .then(stream => { setMicStream(stream); setHasMicPermission(true); })
+      .catch(() => setHasMicPermission(false));
 
-  // End Call & Generate Summary
-  const handleEndCall = async () => {
-    setIsCallActive(false);
-    setCallState('idle');
+    // Play greeting — audio.play() must be called inside same call stack as click
+    speakAria(greeting);
+  }, [stopAllAudio, speakAria]);
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  END CALL
+  // ═══════════════════════════════════════════════════════════════════════════
+  const handleEndCall = useCallback(async () => {
+    isCallActiveRef.current = false;
+    shouldBeListeningRef.current = false;
 
     if (recognitionRef.current) {
       try { recognitionRef.current.abort(); } catch (_) {}
+      recognitionRef.current = null;
     }
     stopAllAudio();
-    if (micStream) {
-      micStream.getTracks().forEach(t => t.stop());
-      setMicStream(null);
-    }
+    setIsCallActive(false);
+    syncSetCallState('idle');
+    setInterimText('');
 
-    if (transcript.length > 0) {
+    micStream?.getTracks().forEach(t => t.stop());
+    setMicStream(null);
+
+    const snap = transcriptRef.current;
+    if (snap.length > 1) {
       try {
         const res = await fetch('/api/summary', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ transcript, durationSeconds: duration })
+          body: JSON.stringify({ transcript: snap, durationSeconds: duration }),
         });
         const data = await res.json();
-        if (data.summary) {
-          setSummary(data.summary);
-          setIsSummaryOpen(true);
-        }
+        if (data.summary) { setSummary(data.summary); setIsSummaryOpen(true); }
       } catch (err) {
-        console.error('Error generating summary:', err);
+        console.error('[Voice] Summary error:', err);
       }
     }
-  };
+  }, [stopAllAudio, syncSetCallState, micStream, duration]);
 
-  const formatDuration = (secs: number) => {
-    const m = Math.floor(secs / 60).toString().padStart(2, '0');
-    const s = (secs % 60).toString().padStart(2, '0');
-    return `${m}:${s}`;
-  };
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  TEST VOICE (outside call)
+  // ═══════════════════════════════════════════════════════════════════════════
+  const handleTestVoice = useCallback(() => {
+    if (isPlayingTest) {
+      stopAllAudio();
+      setIsPlayingTest(false);
+      syncSetCallState('idle');
+      return;
+    }
+    stopAllAudio();
+    setIsPlayingTest(true);
+    // Ensure isCallActiveRef is false so speakAria doesn't try to restart mic
+    isCallActiveRef.current = false;
+    speakAria('Namaste! I am Aria from Aura Skincare. How can I assist you with your order today?', () => {
+      setIsPlayingTest(false);
+      syncSetCallState('idle');
+    });
+  }, [isPlayingTest, stopAllAudio, syncSetCallState, speakAria]);
 
+  const fmt = (s: number) =>
+    `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  RENDER
+  // ═══════════════════════════════════════════════════════════════════════════
   return (
     <div>
-      {/* Cockpit Card */}
+      {/* ── Cockpit Card ─────────────────────────────────────────────────── */}
       <div className="glass-card" style={{ maxWidth: '860px', margin: '0 auto', textAlign: 'center', padding: '36px 28px' }}>
-        {/* State Badge, Voice Controls & Timer */}
+
+        {/* Header row: state badge + controls */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
-          {/* Live State Indicator */}
+
+          {/* Live state indicator pill */}
           <div style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '8px 18px',
-            borderRadius: 'var(--radius-full)',
-            background: callState === 'listening' ? 'rgba(16, 185, 129, 0.15)' :
-                        callState === 'thinking' ? 'rgba(245, 158, 11, 0.15)' :
-                        callState === 'speaking' ? 'rgba(139, 92, 246, 0.15)' : 'rgba(255, 255, 255, 0.05)',
-            border: `1px solid ${
-              callState === 'listening' ? 'var(--status-listening)' :
-              callState === 'thinking' ? 'var(--status-thinking)' :
-              callState === 'speaking' ? 'var(--status-speaking)' : 'rgba(255, 255, 255, 0.1)'
-            }`,
-            color: '#FFFFFF',
-            fontSize: '13px',
-            fontWeight: 700,
-            letterSpacing: '0.04em'
+            display: 'inline-flex', alignItems: 'center', gap: '8px',
+            padding: '8px 18px', borderRadius: 'var(--radius-full)',
+            background: callState === 'listening' ? 'rgba(16,185,129,0.15)'
+              : callState === 'thinking' ? 'rgba(245,158,11,0.15)'
+              : callState === 'speaking' ? 'rgba(139,92,246,0.15)'
+              : 'rgba(255,255,255,0.05)',
+            border: `1px solid ${callState === 'listening' ? 'var(--status-listening)'
+              : callState === 'thinking' ? 'var(--status-thinking)'
+              : callState === 'speaking' ? 'var(--status-speaking)'
+              : 'rgba(255,255,255,0.1)'}`,
+            color: '#FFF', fontSize: '13px', fontWeight: 700, letterSpacing: '0.04em',
           }}>
             <span
               className={isCallActive ? 'animate-pulse-dot' : ''}
               style={{
-                width: '10px',
-                height: '10px',
-                borderRadius: '50%',
-                backgroundColor:
-                  callState === 'listening' ? 'var(--status-listening)' :
-                  callState === 'thinking' ? 'var(--status-thinking)' :
-                  callState === 'speaking' ? 'var(--status-speaking)' : 'var(--text-muted)'
+                width: '10px', height: '10px', borderRadius: '50%',
+                backgroundColor: callState === 'listening' ? 'var(--status-listening)'
+                  : callState === 'thinking' ? 'var(--status-thinking)'
+                  : callState === 'speaking' ? 'var(--status-speaking)'
+                  : 'var(--text-muted)',
               }}
             />
             <span>
               {callState === 'idle' && 'READY TO CONNECT'}
-              {callState === 'listening' && 'LISTENING (SPEAK FREELY)'}
-              {callState === 'thinking' && 'THINKING & VERIFYING DB'}
-              {callState === 'speaking' && 'ARIA SPEAKING (INTERRUPTIBLE)'}
+              {callState === 'listening' && '🎤 LISTENING — SPEAK FREELY'}
+              {callState === 'thinking' && '⚡ THINKING & VERIFYING DB'}
+              {callState === 'speaking' && '🔊 ARIA SPEAKING (INTERRUPT ANYTIME)'}
             </span>
           </div>
 
-          {/* Voice Profile & Interactive Voice Tester */}
+          {/* Timer + voice label + test button */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', fontWeight: 600, color: isCallActive ? 'var(--gold-primary)' : 'var(--text-secondary)' }}>
-              ⏱️ {formatDuration(duration)}
+              ⏱️ {fmt(duration)}
             </span>
 
             <div style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '6px 12px',
-              borderRadius: 'var(--radius-full)',
-              background: 'rgba(212, 175, 55, 0.12)',
-              border: '1px solid var(--gold-primary)',
-              fontSize: '12px',
-              color: 'var(--gold-light)',
-              fontWeight: 600
+              display: 'inline-flex', alignItems: 'center', gap: '6px',
+              padding: '6px 12px', borderRadius: 'var(--radius-full)',
+              background: 'rgba(212,175,55,0.12)', border: '1px solid var(--gold-primary)',
+              fontSize: '12px', color: 'var(--gold-light)', fontWeight: 600,
             }}>
-              <span>🇮🇳 Aria (Indian Female Voice)</span>
+              <span>🇮🇳 Aria · NeerjaNeural (en-IN)</span>
             </div>
 
             <button
+              id="test-voice-btn"
               onClick={handleTestVoice}
               disabled={isCallActive}
               title="Test Aria's Indian accent"
               style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '6px 14px',
-                borderRadius: 'var(--radius-full)',
-                background: isPlayingTest ? 'var(--emerald-accent)' : 'rgba(212, 175, 55, 0.25)',
+                display: 'inline-flex', alignItems: 'center', gap: '6px',
+                padding: '6px 14px', borderRadius: 'var(--radius-full)',
+                background: isPlayingTest ? 'var(--emerald-accent)' : 'rgba(212,175,55,0.25)',
                 border: '1px solid var(--gold-primary)',
-                color: isPlayingTest ? '#071912' : '#FFFFFF',
-                fontSize: '12px',
-                fontWeight: 700,
+                color: isPlayingTest ? '#071912' : '#FFF',
+                fontSize: '12px', fontWeight: 700,
                 cursor: isCallActive ? 'not-allowed' : 'pointer',
                 transition: 'all 0.2s ease',
-                boxShadow: isPlayingTest ? '0 0 15px rgba(16, 185, 129, 0.5)' : 'none'
+                opacity: isCallActive ? 0.5 : 1,
               }}
             >
               {isPlayingTest ? <VolumeX size={14} /> : <Volume2 size={14} />}
@@ -539,28 +525,23 @@ export default function CallCockpit() {
           </div>
         </div>
 
-        {/* Reactive Canvas Waveform */}
+        {/* Waveform visualizer */}
         <AudioVisualizer state={callState} audioStream={micStream} />
 
-        {/* Start / End Call Controls */}
-        <div style={{ marginTop: '32px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '20px' }}>
+        {/* Start / End call buttons */}
+        <div style={{ marginTop: '32px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
           {!isCallActive ? (
             <button
+              id="start-call-btn"
               onClick={handleStartCall}
               style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '12px',
-                padding: '16px 40px',
-                borderRadius: 'var(--radius-full)',
-                background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
-                color: '#FFFFFF',
-                fontSize: '16px',
-                fontWeight: 700,
-                boxShadow: '0 8px 30px rgba(16, 185, 129, 0.4)',
-                border: '1px solid rgba(255, 255, 255, 0.2)',
-                transition: 'all 0.2s ease',
-                cursor: 'pointer'
+                display: 'inline-flex', alignItems: 'center', gap: '12px',
+                padding: '16px 40px', borderRadius: 'var(--radius-full)',
+                background: 'linear-gradient(135deg,#10B981 0%,#059669 100%)',
+                color: '#FFF', fontSize: '16px', fontWeight: 700,
+                boxShadow: '0 8px 30px rgba(16,185,129,0.4)',
+                border: '1px solid rgba(255,255,255,0.2)',
+                cursor: 'pointer', transition: 'all 0.2s ease',
               }}
             >
               <Phone size={20} />
@@ -568,21 +549,16 @@ export default function CallCockpit() {
             </button>
           ) : (
             <button
+              id="end-call-btn"
               onClick={handleEndCall}
               style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '12px',
-                padding: '16px 40px',
-                borderRadius: 'var(--radius-full)',
-                background: 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)',
-                color: '#FFFFFF',
-                fontSize: '16px',
-                fontWeight: 700,
-                boxShadow: '0 8px 30px rgba(239, 68, 68, 0.4)',
-                border: '1px solid rgba(255, 255, 255, 0.2)',
-                transition: 'all 0.2s ease',
-                cursor: 'pointer'
+                display: 'inline-flex', alignItems: 'center', gap: '12px',
+                padding: '16px 40px', borderRadius: 'var(--radius-full)',
+                background: 'linear-gradient(135deg,#EF4444 0%,#DC2626 100%)',
+                color: '#FFF', fontSize: '16px', fontWeight: 700,
+                boxShadow: '0 8px 30px rgba(239,68,68,0.4)',
+                border: '1px solid rgba(255,255,255,0.2)',
+                cursor: 'pointer', transition: 'all 0.2s ease',
               }}
             >
               <PhoneOff size={20} />
@@ -594,61 +570,48 @@ export default function CallCockpit() {
             <button
               onClick={() => setIsSummaryOpen(true)}
               style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '16px 24px',
-                borderRadius: 'var(--radius-full)',
-                background: 'rgba(212, 175, 55, 0.15)',
-                border: '1px solid var(--gold-primary)',
-                color: 'var(--gold-light)',
-                fontSize: '14px',
-                fontWeight: 600,
-                cursor: 'pointer'
+                display: 'inline-flex', alignItems: 'center', gap: '8px',
+                padding: '16px 24px', borderRadius: 'var(--radius-full)',
+                background: 'rgba(212,175,55,0.15)', border: '1px solid var(--gold-primary)',
+                color: 'var(--gold-light)', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
               }}
             >
               <Sparkles size={16} />
-              <span>View Last JSON Summary</span>
+              <span>View Call JSON Summary</span>
             </button>
           )}
         </div>
 
-        {/* Microphone Permission Warning if denied */}
+        {/* Mic permission warning */}
         {hasMicPermission === false && (
-          <div style={{
-            marginTop: '16px',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px',
-            color: '#F87171',
-            fontSize: '12px'
-          }}>
+          <div style={{ marginTop: '16px', display: 'inline-flex', alignItems: 'center', gap: '8px', color: '#F87171', fontSize: '12px' }}>
             <AlertCircle size={14} />
-            <span>Microphone access was denied. You can still test scenarios below using 1-click test chips!</span>
+            <span>Microphone access denied. Use the quick-test chips below to evaluate without a mic.</span>
           </div>
         )}
       </div>
 
-      {/* Evaluator Quick-Test Helper (1-Click Scenario Cards) */}
+      {/* Evaluator quick-test chips */}
       <EvaluatorQuickTest
         onSelectScenario={(prompt) => {
           if (!isCallActive) {
             handleStartCall();
-            setTimeout(() => processUserUtterance(prompt), 1000);
+            // Give Aria's greeting 1.2s then inject the test prompt
+            setTimeout(() => processUserUtterance(prompt), 1200);
           } else {
             processUserUtterance(prompt);
           }
         }}
       />
 
-      {/* Real-time Transcript Stream */}
+      {/* Live transcript */}
       <TranscriptStream
         transcript={transcript}
         interimUserText={interimText}
         isThinking={callState === 'thinking'}
       />
 
-      {/* Post-Call Summary Modal */}
+      {/* Post-call summary modal */}
       <PostCallModal
         isOpen={isSummaryOpen}
         onClose={() => setIsSummaryOpen(false)}
