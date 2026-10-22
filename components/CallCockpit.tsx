@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Phone, PhoneOff, Volume2, Sparkles, AlertCircle, VolumeX, Hand } from 'lucide-react';
+import { Phone, PhoneOff, Sparkles, AlertCircle, Hand } from 'lucide-react';
 import AudioVisualizer from './AudioVisualizer';
 import TranscriptStream from './TranscriptStream';
 import EvaluatorQuickTest from './EvaluatorQuickTest';
@@ -12,20 +12,19 @@ import { CallTranscriptTurn, StructuredCallSummary } from '@/lib/types';
 //  VOIP-GRADE WEB AUDIO & SPEECH ARCHITECTURE:
 //
 //  1. Web Audio API Context Unlocking:
-//     - Instantiated & resumed (.resume()) on the very first user click
-//       ("Start Voice Call" or "Test Voice").
-//     - Once resumed, AudioContext stays in 'running' state indefinitely.
-//     - Chrome NEVER blocks playback across async fetch() boundaries or
-//       multi-turn conversation loops!
+//     - Instantiated & resumed (.resume()) on user click "Start Voice Call".
+//     - AudioContext stays in 'running' state indefinitely.
+//     - Chrome never blocks playback across async fetch() boundaries or
+//       multi-turn conversation loops.
 //
 //  2. Pre-warmed Greeting Audio:
-//     - On page load, initial greeting & sample are pre-fetched into ArrayBuffers.
-//     - Clicking "Start Call" or "Test Voice" plays Aria INSTANTLY (0ms network delay).
+//     - On page load, initial greeting is pre-fetched into ArrayBuffer.
+//     - Clicking "Start Call" plays Aria INSTANTLY (0ms network delay).
 //
 //  3. Echo & Conflict Elimination:
-//     - Mic is explicitly turned off while Aria speaks (zero self-transcription,
+//     - Mic is turned off while Aria speaks (zero self-transcription,
 //       no acoustic echo loops).
-//     - No getUserMedia + AudioContext contention with SpeechRecognition.
+//     - No getUserMedia contention with SpeechRecognition.
 //       SpeechRecognition gets 100% exclusive access to the microphone.
 //     - 350ms acoustic settle window before microphone re-opens.
 //     - One-click or Spacebar barge-in to interrupt Aria at any time.
@@ -34,7 +33,6 @@ import { CallTranscriptTurn, StructuredCallSummary } from '@/lib/types';
 type CallState = 'idle' | 'listening' | 'thinking' | 'speaking';
 
 const GREETING_TEXT = 'Namaste! I am Aria from Aura Skincare. How can I help you with your orders or skincare questions today?';
-const TEST_SAMPLE_TEXT = 'Namaste! I am Aria from Aura Skincare. How can I assist you with your order today?';
 
 export default function CallCockpit() {
   // ── State ─────────────────────────────────────────────────────────────────
@@ -46,7 +44,6 @@ export default function CallCockpit() {
   const [summary, setSummary] = useState<StructuredCallSummary | null>(null);
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
   const [hasMicPermission, setHasMicPermission] = useState<boolean | null>(null);
-  const [isPlayingTest, setIsPlayingTest] = useState(false);
 
   // ── Refs (synchronous, immune to stale closure issues) ─────────────────────
   const isCallActiveRef = useRef(false);
@@ -56,7 +53,6 @@ export default function CallCockpit() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const currentSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const greetingBufferRef = useRef<ArrayBuffer | null>(null);
-  const testSampleBufferRef = useRef<ArrayBuffer | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const transcriptRef = useRef<CallTranscriptTurn[]>([]);
 
@@ -66,16 +62,11 @@ export default function CallCockpit() {
     setCallState(s);
   }, []);
 
-  // ── Pre-warm Audio on Mount (instant first-click playback) ─────────────────
+  // ── Pre-warm Greeting Audio on Mount (instant first-click playback) ───────
   useEffect(() => {
     fetch(`/api/tts?text=${encodeURIComponent(GREETING_TEXT)}`)
       .then(res => res.ok ? res.arrayBuffer() : null)
       .then(buf => { if (buf) greetingBufferRef.current = buf; })
-      .catch(() => {});
-
-    fetch(`/api/tts?text=${encodeURIComponent(TEST_SAMPLE_TEXT)}`)
-      .then(res => res.ok ? res.arrayBuffer() : null)
-      .then(buf => { if (buf) testSampleBufferRef.current = buf; })
       .catch(() => {});
   }, []);
 
@@ -121,7 +112,7 @@ export default function CallCockpit() {
 
   // ═══════════════════════════════════════════════════════════════════════════
   //  SPEECH RECOGNITION (en-IN)
-  //  Exclusive mic hardware access — no getUserMedia collisions!
+  //  Exclusive mic hardware access — zero contention
   // ═══════════════════════════════════════════════════════════════════════════
   const startListening = useCallback(() => {
     if (!isCallActiveRef.current || !shouldBeListeningRef.current) return;
@@ -217,13 +208,10 @@ export default function CallCockpit() {
 
       // Check pre-warmed cache for instant start
       const isGreeting = text.includes('orders or skincare questions today');
-      const isTestSample = text.includes('assist you with your order today');
 
       let arrayBuffer: ArrayBuffer | null = null;
       if (isGreeting && greetingBufferRef.current) {
         arrayBuffer = greetingBufferRef.current.slice(0);
-      } else if (isTestSample && testSampleBufferRef.current) {
-        arrayBuffer = testSampleBufferRef.current.slice(0);
       } else {
         const res = await fetch(`/api/tts?text=${encodeURIComponent(text)}`);
         if (!res.ok) throw new Error(`TTS server HTTP ${res.status}`);
@@ -372,7 +360,6 @@ export default function CallCockpit() {
   // ═══════════════════════════════════════════════════════════════════════════
   const handleStartCall = useCallback(async () => {
     stopAllAudio();
-    setIsPlayingTest(false);
 
     // CRITICAL: Unlock AudioContext synchronously inside user click
     await getUnlockedAudioContext();
@@ -430,29 +417,6 @@ export default function CallCockpit() {
     }
   }, [stopAllAudio, syncCallState, duration]);
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  //  TEST VOICE (instant sample playback)
-  // ═══════════════════════════════════════════════════════════════════════════
-  const handleTestVoice = useCallback(async () => {
-    if (isPlayingTest) {
-      stopAllAudio();
-      setIsPlayingTest(false);
-      syncCallState('idle');
-      return;
-    }
-    stopAllAudio();
-    setIsPlayingTest(true);
-    isCallActiveRef.current = false; // don't start mic after sample
-
-    // CRITICAL: Unlock AudioContext inside user click
-    await getUnlockedAudioContext();
-
-    playAriaAudio(TEST_SAMPLE_TEXT, () => {
-      setIsPlayingTest(false);
-      syncCallState('idle');
-    });
-  }, [isPlayingTest, stopAllAudio, syncCallState, getUnlockedAudioContext, playAriaAudio]);
-
   // ── Format helper ─────────────────────────────────────────────────────────
   const fmt = (s: number) =>
     `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
@@ -499,7 +463,7 @@ export default function CallCockpit() {
             </span>
           </div>
 
-          {/* Timer + voice badge + test button */}
+          {/* Timer + voice badge */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', fontWeight: 600, color: isCallActive ? 'var(--gold-primary)' : 'var(--text-secondary)' }}>
               ⏱️ {fmt(duration)}
@@ -507,33 +471,12 @@ export default function CallCockpit() {
 
             <div style={{
               display: 'inline-flex', alignItems: 'center', gap: '6px',
-              padding: '6px 12px', borderRadius: 'var(--radius-full)',
+              padding: '6px 14px', borderRadius: 'var(--radius-full)',
               background: 'rgba(212,175,55,0.12)', border: '1px solid var(--gold-primary)',
               fontSize: '12px', color: 'var(--gold-light)', fontWeight: 600,
             }}>
               <span>🇮🇳 Aria · NeerjaNeural (en-IN)</span>
             </div>
-
-            <button
-              id="test-voice-btn"
-              onClick={handleTestVoice}
-              disabled={isCallActive}
-              title="Test Aria's Indian accent"
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: '6px',
-                padding: '6px 14px', borderRadius: 'var(--radius-full)',
-                background: isPlayingTest ? 'var(--emerald-accent)' : 'rgba(212,175,55,0.25)',
-                border: '1px solid var(--gold-primary)',
-                color: isPlayingTest ? '#071912' : '#FFF',
-                fontSize: '12px', fontWeight: 700,
-                cursor: isCallActive ? 'not-allowed' : 'pointer',
-                transition: 'all 0.2s ease',
-                opacity: isCallActive ? 0.5 : 1,
-              }}
-            >
-              {isPlayingTest ? <VolumeX size={14} /> : <Volume2 size={14} />}
-              <span>{isPlayingTest ? 'Stop Sample' : '🔊 Test Voice'}</span>
-            </button>
           </div>
         </div>
 
