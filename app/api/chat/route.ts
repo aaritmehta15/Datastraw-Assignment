@@ -238,8 +238,8 @@ export async function POST(req: NextRequest) {
         if (groqKey) {
           baseURL = 'https://api.groq.com/openai/v1';
           apiKey = groqKey;
-          model = 'llama-3.3-70b-versatile';
-          llmProvider = 'groq-llama-3.3';
+          model = 'openai/gpt-oss-120b';
+          llmProvider = 'groq-gpt-oss-120b';
         } else if (geminiKey) {
           baseURL = 'https://generativelanguage.googleapis.com/v1beta/openai/';
           apiKey = geminiKey;
