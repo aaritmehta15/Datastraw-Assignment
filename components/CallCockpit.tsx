@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Phone, PhoneOff, Mic, Volume2, Sparkles, AlertCircle, RefreshCw, VolumeX } from 'lucide-react';
+import { Phone, PhoneOff, Mic, Volume2, Sparkles, AlertCircle, VolumeX } from 'lucide-react';
 import AudioVisualizer from './AudioVisualizer';
 import TranscriptStream from './TranscriptStream';
 import EvaluatorQuickTest from './EvaluatorQuickTest';
@@ -10,7 +10,7 @@ import { CallTranscriptTurn, StructuredCallSummary } from '@/lib/types';
 
 export default function CallCockpit() {
   const [isCallActive, setIsCallActive] = useState(false);
-  const [callState, setCallState] = useState<'idle' | 'listening' | 'thinking' | 'speaking'>('idle');
+  const [callState, _setCallState] = useState<'idle' | 'listening' | 'thinking' | 'speaking'>('idle');
   const [duration, setDuration] = useState(0);
   const [transcript, setTranscript] = useState<CallTranscriptTurn[]>([]);
   const [interimText, setInterimText] = useState('');
@@ -23,9 +23,30 @@ export default function CallCockpit() {
   const recognitionRef = useRef<any>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
-  const playPromiseRef = useRef<Promise<void> | null>(null);
   const isCallActiveRef = useRef(isCallActive);
   isCallActiveRef.current = isCallActive;
+
+  // Synchronous state ref to prevent stale closure bugs in onend / onresult callbacks
+  const callStateRef = useRef<'idle' | 'listening' | 'thinking' | 'speaking'>('idle');
+  const setCallState = (newState: 'idle' | 'listening' | 'thinking' | 'speaking') => {
+    callStateRef.current = newState;
+    _setCallState(newState);
+  };
+
+  // Browser speech synthesis voices cache
+  const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      const loadVoices = () => {
+        const v = window.speechSynthesis.getVoices();
+        if (v && v.length > 0) {
+          voicesRef.current = v;
+        }
+      };
+      loadVoices();
+      window.speechSynthesis.onvoiceschanged = loadVoices;
+    }
+  }, []);
 
   // Active call duration timer
   useEffect(() => {
@@ -41,28 +62,103 @@ export default function CallCockpit() {
     };
   }, [isCallActive]);
 
-  // Cleanly stop any active audio playback without AbortError cascades
+  // Cleanly stop any ongoing audio immediately
   const stopAllAudio = () => {
-    const audio = currentAudioRef.current;
-    if (audio) {
-      // If a play promise is pending, wait for it before calling pause
-      if (playPromiseRef.current) {
-        playPromiseRef.current
-          .then(() => {
-            audio.pause();
-            audio.currentTime = 0;
-          })
-          .catch(() => {});
-      } else {
-        audio.pause();
-        audio.currentTime = 0;
-      }
+    if (currentAudioRef.current) {
+      try {
+        currentAudioRef.current.pause();
+        currentAudioRef.current.currentTime = 0;
+      } catch (_) {}
       currentAudioRef.current = null;
-      playPromiseRef.current = null;
     }
 
     if (typeof window !== 'undefined' && window.speechSynthesis) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch (_) {}
+    }
+  };
+
+  // Browser SpeechSynthesis strictly tuned for female Indian persona (Fallback)
+  const speakViaBrowser = (text: string, onComplete?: () => void) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) {
+      if (onComplete) onComplete();
+      return;
+    }
+
+    try {
       window.speechSynthesis.cancel();
+
+      setTimeout(() => {
+        try {
+          const utterance = new SpeechSynthesisUtterance(text);
+          const availableVoices = voicesRef.current.length > 0
+            ? voicesRef.current
+            : window.speechSynthesis.getVoices();
+
+          // 1. First priority: Indian female voice
+          const femaleIndian = availableVoices.find(v =>
+            (v.lang.toLowerCase().includes('en-in') || v.lang.toLowerCase().includes('hi-in')) &&
+            (v.name.toLowerCase().includes('heera') ||
+             v.name.toLowerCase().includes('neerja') ||
+             v.name.toLowerCase().includes('swara') ||
+             v.name.toLowerCase().includes('female') ||
+             !v.name.toLowerCase().includes('david'))
+          );
+
+          // 2. Second priority: Any en-IN voice
+          const anyIndian = availableVoices.find(v => v.lang.toLowerCase().includes('en-in'));
+
+          // 3. Third priority: Any natural female voice
+          const generalFemale = availableVoices.find(v =>
+            (v.name.toLowerCase().includes('zira') ||
+             v.name.toLowerCase().includes('female') ||
+             v.name.toLowerCase().includes('natural') ||
+             v.name.toLowerCase().includes('google uk english female')) &&
+            !v.name.toLowerCase().includes('david') &&
+            !v.name.toLowerCase().includes('male')
+          );
+
+          const chosen = femaleIndian || anyIndian || generalFemale;
+          if (chosen) utterance.voice = chosen;
+
+          utterance.lang = 'en-IN';
+          utterance.pitch = 1.05;
+          utterance.rate = 1.0;
+
+          utterance.onend = () => {
+            if (isCallActiveRef.current) {
+              setCallState('listening');
+              setTimeout(() => {
+                if (isCallActiveRef.current) startSpeechRecognition();
+              }, 100);
+            } else {
+              setCallState('idle');
+            }
+            if (onComplete) onComplete();
+          };
+
+          utterance.onerror = () => {
+            if (isCallActiveRef.current) {
+              setCallState('listening');
+              setTimeout(() => {
+                if (isCallActiveRef.current) startSpeechRecognition();
+              }, 100);
+            } else {
+              setCallState('idle');
+            }
+            if (onComplete) onComplete();
+          };
+
+          window.speechSynthesis.speak(utterance);
+        } catch (e) {
+          console.warn('SpeechSynthesis error:', e);
+          if (onComplete) onComplete();
+        }
+      }, 50);
+    } catch (e) {
+      console.warn('Browser speech cancel error:', e);
+      if (onComplete) onComplete();
     }
   };
 
@@ -70,7 +166,6 @@ export default function CallCockpit() {
   const speakAria = (text: string, onComplete?: () => void) => {
     stopAllAudio();
 
-    // Temporarily pause speech recognition while Aria speaks to prevent speaker echo
     if (recognitionRef.current) {
       try { recognitionRef.current.abort(); } catch (_) {}
     }
@@ -78,50 +173,41 @@ export default function CallCockpit() {
     setCallState('speaking');
 
     const audioUrl = `/api/tts?text=${encodeURIComponent(text)}`;
-    const audio = new Audio(audioUrl);
+    const audio = new Audio();
+    audio.src = audioUrl;
+    audio.volume = 1.0;
     currentAudioRef.current = audio;
 
-    audio.onended = () => {
+    let hasCleanedUp = false;
+    const cleanupAndNext = () => {
+      if (hasCleanedUp) return;
+      hasCleanedUp = true;
       currentAudioRef.current = null;
-      playPromiseRef.current = null;
-
       if (isCallActiveRef.current) {
         setCallState('listening');
-        // Resume listening after 200ms quiet buffer
         setTimeout(() => {
           if (isCallActiveRef.current) startSpeechRecognition();
-        }, 200);
+        }, 150);
       } else {
         setCallState('idle');
       }
-
       if (onComplete) onComplete();
     };
+
+    audio.onended = cleanupAndNext;
 
     audio.onerror = (e) => {
-      console.warn('Audio playback error, resuming listener:', e);
+      console.warn('Audio stream error, falling back to browser female voice:', e);
       currentAudioRef.current = null;
-      playPromiseRef.current = null;
-
-      if (isCallActiveRef.current) {
-        setCallState('listening');
-        startSpeechRecognition();
-      } else {
-        setCallState('idle');
-      }
-      if (onComplete) onComplete();
+      speakViaBrowser(text, onComplete);
     };
 
-    // Safely execute play() tracking promise
     const promise = audio.play();
     if (promise !== undefined) {
-      playPromiseRef.current = promise;
       promise.catch((err) => {
-        // If pause() was intentionally called (e.g., Barge-in or stop test), don't treat as error
-        if (err.name === 'AbortError') {
-          return;
-        }
-        console.warn('Audio play error:', err);
+        if (err.name === 'AbortError') return;
+        console.warn('Audio play prevented or interrupted, falling back to browser voice:', err);
+        speakViaBrowser(text, onComplete);
       });
     }
   };
@@ -135,10 +221,12 @@ export default function CallCockpit() {
       return;
     }
 
+    stopAllAudio();
     setIsPlayingTest(true);
     const sample = "Namaste! I am Aria from Aura Skincare. How can I assist you with your order today?";
     speakAria(sample, () => {
       setIsPlayingTest(false);
+      setCallState('idle');
     });
   };
 
@@ -146,7 +234,6 @@ export default function CallCockpit() {
   const startSpeechRecognition = () => {
     if (typeof window === 'undefined') return;
 
-    // Do not start mic recognition if Aria is actively speaking (prevents speaker echo)
     if (currentAudioRef.current && !currentAudioRef.current.paused) {
       return;
     }
@@ -171,12 +258,7 @@ export default function CallCockpit() {
         setHasMicPermission(true);
       };
 
-      recognition.onspeechstart = () => {
-        // True Barge-In: If Aria is speaking and user speaks, stop Aria immediately!
-        stopAllAudio();
-        setCallState('listening');
-      };
-
+      // Section 8 Barge-in: only interrupt if actual words are spoken, not background mic noise
       recognition.onresult = (event: any) => {
         let interim = '';
         let finalUtterance = '';
@@ -187,6 +269,12 @@ export default function CallCockpit() {
           } else {
             interim += event.results[i][0].transcript;
           }
+        }
+
+        // Barge-in active check
+        if (callStateRef.current === 'speaking' && (interim.trim().length > 3 || finalUtterance.trim().length > 0)) {
+          stopAllAudio();
+          setCallState('listening');
         }
 
         setInterimText(interim);
@@ -207,8 +295,8 @@ export default function CallCockpit() {
       };
 
       recognition.onend = () => {
-        // Automatically resume listening if call is still active and Aria is not speaking
-        if (isCallActiveRef.current && callState !== 'speaking' && callState !== 'thinking') {
+        // Only restart if call is still active and we are in 'listening' mode (not speaking, not thinking)
+        if (isCallActiveRef.current && callStateRef.current === 'listening') {
           try {
             recognition.start();
           } catch (_) {}
@@ -280,25 +368,31 @@ export default function CallCockpit() {
     }
   };
 
-  // Start Call
-  const handleStartCall = async () => {
+  // Start Call (Instant user gesture activation)
+  const handleStartCall = () => {
     stopAllAudio();
     setIsPlayingTest(false);
 
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      setMicStream(stream);
-      setHasMicPermission(true);
-    } catch (e) {
-      console.warn('Could not access microphone directly:', e);
-      setHasMicPermission(false);
-    }
-
+    // 1. Immediately activate call state (Zero UI lag)
     setIsCallActive(true);
     setDuration(0);
     setTranscript([]);
     setSummary(null);
 
+    // 2. Request mic in background without blocking audio play
+    if (typeof navigator !== 'undefined' && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(stream => {
+          setMicStream(stream);
+          setHasMicPermission(true);
+        })
+        .catch(e => {
+          console.warn('Microphone permission info:', e);
+          setHasMicPermission(false);
+        });
+    }
+
+    // 3. Immediately queue greeting turn
     const greeting = "Namaste! I am Aria from Aura Skincare. How can I assist you with your orders or skincare questions today?";
     const initialTurn: CallTranscriptTurn = {
       id: `turn-${Date.now()}-init`,
@@ -308,7 +402,7 @@ export default function CallCockpit() {
     };
     setTranscript([initialTurn]);
 
-    // Speak greeting first, then start listening once she finishes
+    // 4. Play greeting within user gesture
     speakAria(greeting, () => {
       startSpeechRecognition();
     });
@@ -539,9 +633,8 @@ export default function CallCockpit() {
       <EvaluatorQuickTest
         onSelectScenario={(prompt) => {
           if (!isCallActive) {
-            handleStartCall().then(() => {
-              setTimeout(() => processUserUtterance(prompt), 1400);
-            });
+            handleStartCall();
+            setTimeout(() => processUserUtterance(prompt), 1000);
           } else {
             processUserUtterance(prompt);
           }
