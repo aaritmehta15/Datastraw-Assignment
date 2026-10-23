@@ -1,4 +1,4 @@
-import { Order } from './types';
+import { Order, OrderStatus } from './types';
 
 // Initial Seed Database according to DataStraw specification
 const SEED_ORDERS: Record<string, Order> = {
@@ -73,14 +73,14 @@ export function normalizeOrderId(rawInput: string | null | undefined): string | 
   // Remove spaces between single digits (e.g., "1 0 1" -> "101")
   text = text.replace(/(\d)\s+(\d)/g, '$1$2').replace(/(\d)\s+(\d)/g, '$1$2');
 
-  // Match pattern like "ord-101", "ord 101", "ord101", "order 101"
-  const ordMatch = text.match(/(?:ord|order)[\s\-_]*(\d{3})/i);
+  // Match pattern like "ord-101", "ord 101", "ord101", "order 101", "ord 104"
+  const ordMatch = text.match(/(?:ord|order)[\s\-_]*(\d{3,5})/i);
   if (ordMatch) {
     return `ORD-${ordMatch[1]}`;
   }
 
-  // Match isolated 3-digit order number (e.g. "101", "102", "103")
-  const digitMatch = text.match(/\b(10[1-9]|1[1-9]\d|[2-9]\d{2})\b/);
+  // Match isolated 3 to 5-digit order number (e.g. "101", "102", "103", "104")
+  const digitMatch = text.match(/\b(10[1-9]|1[1-9]\d|[2-9]\d{2}|\d{4,5})\b/);
   if (digitMatch) {
     return `ORD-${digitMatch[1]}`;
   }
@@ -179,6 +179,80 @@ export function cancelOrder(orderIdRaw: string) {
     success: false,
     error: 'CANNOT_CANCEL',
     message: `Order ${order.orderId} is currently in "${order.status}" status and cannot be cancelled.`
+  };
+}
+
+/**
+ * Creates and stores a manual order in the live database
+ */
+export function createOrder(data: {
+  orderId?: string;
+  customerName: string;
+  product: string;
+  value: number;
+  status: OrderStatus;
+  carrier?: string;
+  trackingNumber?: string;
+  estimatedDelivery?: string;
+  deliveredDate?: string;
+  daysSinceDelivery?: number;
+  notes?: string;
+}): { success: boolean; order?: Order; error?: string; message?: string } {
+  let orderId = data.orderId ? normalizeOrderId(data.orderId) : null;
+
+  // Auto-generate next order ID if not specified or invalid
+  if (!orderId) {
+    const existingNums = Object.keys(activeOrders)
+      .map(id => parseInt(id.replace(/\D/g, ''), 10))
+      .filter(n => !isNaN(n));
+    const nextNum = existingNums.length > 0 ? Math.max(...existingNums) + 1 : 104;
+    orderId = `ORD-${nextNum}`;
+  }
+
+  const status = data.status || 'Processing';
+  const canCancel = status === 'Processing';
+  const daysSince = data.daysSinceDelivery !== undefined ? Number(data.daysSinceDelivery) : (status === 'Delivered' ? 3 : undefined);
+  const canReturn = status === 'Delivered' && (daysSince !== undefined ? daysSince <= 7 : true);
+
+  let policyNotes = '';
+  if (status === 'Processing') {
+    policyNotes = 'Order is in Processing status in the warehouse. Fully eligible for immediate cancellation.';
+  } else if (status === 'Out for Delivery' || status === 'Shipped') {
+    policyNotes = `Dispatched with ${data.carrier || 'courier'}. Policy strictly forbids cancellation once dispatched. If customer refuses, advise doorstep delivery refusal.`;
+  } else if (status === 'Delivered') {
+    if (daysSince !== undefined && daysSince > 7) {
+      policyNotes = `Delivered ${daysSince} days ago. Aura policy requires returns within 7 days for unopened products. Return request must be politely declined.`;
+    } else {
+      policyNotes = `Delivered ${daysSince || 1} day(s) ago. Within 7-day return window for unopened products.`;
+    }
+  } else if (status === 'Cancelled') {
+    policyNotes = 'Order has been cancelled. No dispatch or fulfillment will take place.';
+  }
+
+  const newOrder: Order = {
+    orderId,
+    customerName: data.customerName?.trim() || 'Valued Customer',
+    product: data.product?.trim() || 'Aura Organic Botanical Blend',
+    value: Number(data.value) || 699,
+    status,
+    carrier: data.carrier || (status === 'Processing' ? 'Unassigned (Warehouse)' : 'BlueDart'),
+    trackingNumber: data.trackingNumber || (status !== 'Processing' && status !== 'Cancelled' ? `BD-${Math.floor(100000 + Math.random() * 900000)}` : undefined),
+    estimatedDelivery: data.estimatedDelivery || (status === 'Out for Delivery' ? 'Expected by 6 PM today' : (status === 'Shipped' ? 'Expected in 2 business days' : undefined)),
+    deliveredDate: status === 'Delivered' ? (data.deliveredDate || `${daysSince || 3} days ago`) : undefined,
+    daysSinceDelivery: status === 'Delivered' ? daysSince : undefined,
+    notes: data.notes || `${data.carrier || 'Warehouse'} — Status: ${status}`,
+    canCancel,
+    canReturn,
+    policyNotes,
+    updatedAt: new Date().toISOString(),
+  };
+
+  activeOrders[orderId] = newOrder;
+
+  return {
+    success: true,
+    order: newOrder,
+    message: `Order ${orderId} created successfully for ${newOrder.customerName}. It is now live in the OMS and accessible by Aria on voice calls!`
   };
 }
 

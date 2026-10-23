@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAllOrders, getOrderDetails, cancelOrder, resetOrderDatabase } from '@/lib/orderDatabase';
+import { getAllOrders, getOrderDetails, cancelOrder, createOrder, resetOrderDatabase } from '@/lib/orderDatabase';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -21,7 +21,23 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { action, orderId } = body;
+    const { action, orderId, orderData } = body;
+
+    // Create new order action
+    if (action === 'create') {
+      if (!orderData) {
+        return NextResponse.json(
+          { success: false, error: 'MISSING_ORDER_DATA', message: 'Order data payload is required.' },
+          { status: 400 }
+        );
+      }
+      const result = createOrder(orderData);
+      return NextResponse.json({
+        success: result.success,
+        result,
+        orders: getAllOrders()
+      });
+    }
 
     if (!orderId) {
       return NextResponse.json(

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getOrderDetails, cancelOrder, getAllOrders } from '@/lib/orderDatabase';
+import { getOrderDetails, cancelOrder, getAllOrders, normalizeOrderId } from '@/lib/orderDatabase';
 import { normalizeTextForVoice } from '@/lib/voiceNormalizer';
 import { AURA_BRAND_OVERVIEW, BRAND_POLICIES } from '@/lib/brandKnowledge';
 
@@ -78,6 +78,7 @@ const TOOL_DEFINITIONS = [
 // Fallback deterministic logic when no API key is provided
 function handleDeterministicFallback(userMessage: string, history: any[]) {
   const lower = userMessage.toLowerCase();
+  const extractedOrderId = normalizeOrderId(userMessage);
 
   // Out of scope check
   if (lower.includes('flight') || lower.includes('goa') || lower.includes('weather') || lower.includes('cricket') || lower.includes('hotel')) {
@@ -89,29 +90,14 @@ function handleDeterministicFallback(userMessage: string, history: any[]) {
 
   // Cancellation intent
   if (lower.includes('cancel')) {
-    const match = lower.match(/(?:ord|order)?[\s\-_]*(10[1-3])/i);
-    if (match) {
-      const orderId = `ORD-${match[1]}`;
-      const result = cancelOrder(orderId);
-      const toolCalls = [{ toolName: 'cancel_order', params: { order_id: orderId }, result }];
+    if (extractedOrderId) {
+      const result = cancelOrder(extractedOrderId);
+      const toolCalls = [{ toolName: 'cancel_order', params: { order_id: extractedOrderId }, result }];
 
-      if (result.success) {
-        return {
-          message: `I have successfully cancelled order ${orderId} for your Green Tea Face Wash. Since it was in Processing, no delivery will be made and your refund will reflect within 5 to 7 business days.`,
-          toolCalls
-        };
-      } else {
-        if (orderId === 'ORD-101') {
-          return {
-            message: `I cannot cancel order ${orderId} because it is already out for delivery with BlueDart. As per Aura policy, please refuse delivery when the courier arrives at your doorstep.`,
-            toolCalls
-          };
-        }
-        return {
-          message: `I am unable to cancel order ${orderId} as it does not meet our cancellation policy requirements.`,
-          toolCalls
-        };
-      }
+      return {
+        message: result.message || `Order ${extractedOrderId} cancellation processed.`,
+        toolCalls
+      };
     } else {
       return {
         message: "I can certainly check cancellation options for you. Could you please provide your order ID, such as ORD-101 or ORD-103?",
@@ -122,20 +108,25 @@ function handleDeterministicFallback(userMessage: string, history: any[]) {
 
   // Return / Refund intent
   if (lower.includes('return') || lower.includes('refund')) {
-    const match = lower.match(/(?:ord|order)?[\s\-_]*(10[1-3])/i);
-    if (match) {
-      const orderId = `ORD-${match[1]}`;
-      const details = getOrderDetails(orderId);
-      const toolCalls = [{ toolName: 'get_order_details', params: { order_id: orderId }, result: details }];
+    if (extractedOrderId) {
+      const details = getOrderDetails(extractedOrderId);
+      const toolCalls = [{ toolName: 'get_order_details', params: { order_id: extractedOrderId }, result: details }];
 
-      if (orderId === 'ORD-102') {
+      if (!details.found) {
         return {
-          message: `I checked order ORD-102 for your Sunscreen. It was delivered 14 days ago. Our policy allows returns within 7 days for unopened products, so unfortunately this order is no longer eligible for a return.`,
+          message: `I could not locate an order matching ${extractedOrderId}. Could you please verify the order ID from your confirmation email?`,
+          toolCalls
+        };
+      }
+
+      if (details.daysSinceDelivery && details.daysSinceDelivery > 7) {
+        return {
+          message: `I checked order ${details.orderId} for your ${details.product}. It was delivered ${details.daysSinceDelivery} days ago. Our policy allows returns within 7 days for unopened products, so unfortunately this order is no longer eligible for a return.`,
           toolCalls
         };
       }
       return {
-        message: `For order ${orderId}, our policy allows returns within 7 days of delivery for unopened and unused items in original packaging.`,
+        message: `For order ${details.orderId}, our policy allows returns within 7 days of delivery for unopened and unused items in original packaging.`,
         toolCalls
       };
     } else {
@@ -147,40 +138,35 @@ function handleDeterministicFallback(userMessage: string, history: any[]) {
   }
 
   // Order status / tracking intent
-  const orderMatch = lower.match(/(?:ord|order)?[\s\-_]*(10[1-3]|999)/i);
-  if (orderMatch || lower.includes('where is') || lower.includes('track') || lower.includes('status')) {
-    if (orderMatch) {
-      const orderId = `ORD-${orderMatch[1]}`;
-      const details = getOrderDetails(orderId);
-      const toolCalls = [{ toolName: 'get_order_details', params: { order_id: orderId }, result: details }];
+  if (extractedOrderId || lower.includes('where is') || lower.includes('track') || lower.includes('status')) {
+    if (extractedOrderId) {
+      const details = getOrderDetails(extractedOrderId);
+      const toolCalls = [{ toolName: 'get_order_details', params: { order_id: extractedOrderId }, result: details }];
 
       if (!details.found) {
         return {
-          message: `I could not find an order with the number ${orderId}. Could you please double check your order confirmation email and verify the ID?`,
+          message: `I could not find an order with the number ${extractedOrderId}. Could you please double check your order confirmation email and verify the ID?`,
           toolCalls
         };
       }
 
-      if (orderId === 'ORD-101') {
-        return {
-          message: `I located your order ORD-101 for Priya Sharma. Your Vitamin C Serum is currently out for delivery with BlueDart and is expected to arrive by 6 PM today.`,
-          toolCalls
-        };
+      let trackingPhrase = '';
+      if (details.status === 'Out for Delivery') {
+        trackingPhrase = `Your ${details.product} is currently out for delivery with ${details.carrier || 'BlueDart'} and is ${details.estimatedDelivery || 'expected today'}.`;
+      } else if (details.status === 'Delivered') {
+        trackingPhrase = `Your order ${details.orderId} for ${details.product} was delivered ${details.deliveredDate || 'recently'}${details.carrier ? ' via ' + details.carrier : ''}.`;
+      } else if (details.status === 'Processing') {
+        trackingPhrase = `Your order ${details.orderId} for ${details.product} is currently in Processing at our warehouse and is eligible for cancellation if needed.`;
+      } else if (details.status === 'Cancelled') {
+        trackingPhrase = `Order ${details.orderId} for ${details.product} was cancelled. No delivery will be made.`;
+      } else {
+        trackingPhrase = `Your order ${details.orderId} for ${details.product} is currently ${details.status}${details.carrier ? ' with ' + details.carrier : ''}.`;
       }
 
-      if (orderId === 'ORD-102') {
-        return {
-          message: `Your order ORD-102 for the Hydrating Sunscreen was delivered 14 days ago via Delhivery.`,
-          toolCalls
-        };
-      }
-
-      if (orderId === 'ORD-103') {
-        return {
-          message: `Your order ORD-103 for the Green Tea Face Wash and Toner is currently in Processing at our warehouse and is eligible for cancellation if needed.`,
-          toolCalls
-        };
-      }
+      return {
+        message: `I located your order ${details.orderId} for ${details.customerName}. ${trackingPhrase}`,
+        toolCalls
+      };
     } else {
       return {
         message: "I would be happy to track your order for you. Could you please share your order ID, for example ORD-101?",
