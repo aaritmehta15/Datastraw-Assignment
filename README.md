@@ -156,7 +156,7 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-> **Note on API Keys:** The application includes an intelligent, deterministic conversational engine that works **immediately out-of-the-box with zero API keys required**. Evaluators can test all order lookups, policy questions, and cancellations instantly. Adding a `GROQ_API_KEY`, `GEMINI_API_KEY`, or `OPENAI_API_KEY` in `.env.local` unlocks live cloud LLM reasoning.
+> **Note on API Keys:** The application includes an intelligent, deterministic conversational engine that works **immediately out-of-the-box with zero API keys required**. Evaluators can test all order lookups, policy questions, and cancellations instantly. Adding a `GROQ_API_KEY` or `GEMINI_API_KEY` in `.env.local` unlocks live cloud neural inference.
 
 ---
 
