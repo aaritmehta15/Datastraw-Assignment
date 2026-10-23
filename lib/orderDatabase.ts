@@ -45,8 +45,18 @@ const SEED_ORDERS: Record<string, Order> = {
   }
 };
 
-// Global in-memory store (persists during runtime in memory)
-let activeOrders: Record<string, Order> = JSON.parse(JSON.stringify(SEED_ORDERS));
+// Global in-memory store attached to globalThis to ensure cross-route persistence in Next.js
+declare global {
+  // eslint-disable-next-line no-var
+  var __AURA_ACTIVE_ORDERS__: Record<string, Order> | undefined;
+}
+
+function getStore(): Record<string, Order> {
+  if (!globalThis.__AURA_ACTIVE_ORDERS__) {
+    globalThis.__AURA_ACTIVE_ORDERS__ = JSON.parse(JSON.stringify(SEED_ORDERS));
+  }
+  return globalThis.__AURA_ACTIVE_ORDERS__;
+}
 
 /**
  * Normalizes user speech input to canonical Order ID format (ORD-XXX).
@@ -92,9 +102,10 @@ export function normalizeOrderId(rawInput: string | null | undefined): string | 
  * Deterministic Order Query Tool
  */
 export function getOrderDetails(orderIdRaw: string) {
+  const store = getStore();
   const canonicalId = normalizeOrderId(orderIdRaw);
 
-  if (!canonicalId || !activeOrders[canonicalId]) {
+  if (!canonicalId || !store[canonicalId]) {
     return {
       found: false,
       error: 'ORDER_NOT_FOUND',
@@ -104,7 +115,7 @@ export function getOrderDetails(orderIdRaw: string) {
     };
   }
 
-  const order = activeOrders[canonicalId];
+  const order = store[canonicalId];
   return {
     found: true,
     orderId: order.orderId,
@@ -128,9 +139,10 @@ export function getOrderDetails(orderIdRaw: string) {
  * Deterministic Order Cancellation Tool
  */
 export function cancelOrder(orderIdRaw: string) {
+  const store = getStore();
   const canonicalId = normalizeOrderId(orderIdRaw);
 
-  if (!canonicalId || !activeOrders[canonicalId]) {
+  if (!canonicalId || !store[canonicalId]) {
     return {
       success: false,
       error: 'ORDER_NOT_FOUND',
@@ -138,7 +150,7 @@ export function cancelOrder(orderIdRaw: string) {
     };
   }
 
-  const order = activeOrders[canonicalId];
+  const order = store[canonicalId];
 
   // Strictly enforce brand cancellation policy in code
   if (order.status === 'Processing') {
@@ -198,11 +210,12 @@ export function createOrder(data: {
   daysSinceDelivery?: number;
   notes?: string;
 }): { success: boolean; order?: Order; error?: string; message?: string } {
+  const store = getStore();
   let orderId = data.orderId ? normalizeOrderId(data.orderId) : null;
 
   // Auto-generate next order ID if not specified or invalid
   if (!orderId) {
-    const existingNums = Object.keys(activeOrders)
+    const existingNums = Object.keys(store)
       .map(id => parseInt(id.replace(/\D/g, ''), 10))
       .filter(n => !isNaN(n));
     const nextNum = existingNums.length > 0 ? Math.max(...existingNums) + 1 : 104;
@@ -247,7 +260,7 @@ export function createOrder(data: {
     updatedAt: new Date().toISOString(),
   };
 
-  activeOrders[orderId] = newOrder;
+  store[orderId] = newOrder;
 
   return {
     success: true,
@@ -260,12 +273,12 @@ export function createOrder(data: {
  * Returns all active orders for UI dashboard
  */
 export function getAllOrders(): Order[] {
-  return Object.values(activeOrders);
+  return Object.values(getStore());
 }
 
 /**
  * Resets the database to seed state
  */
 export function resetOrderDatabase(): void {
-  activeOrders = JSON.parse(JSON.stringify(SEED_ORDERS));
+  globalThis.__AURA_ACTIVE_ORDERS__ = JSON.parse(JSON.stringify(SEED_ORDERS));
 }
