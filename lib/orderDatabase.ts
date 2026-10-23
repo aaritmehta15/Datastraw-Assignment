@@ -55,7 +55,7 @@ function getStore(): Record<string, Order> {
   if (!globalThis.__AURA_ACTIVE_ORDERS__) {
     globalThis.__AURA_ACTIVE_ORDERS__ = JSON.parse(JSON.stringify(SEED_ORDERS));
   }
-  return globalThis.__AURA_ACTIVE_ORDERS__;
+  return globalThis.__AURA_ACTIVE_ORDERS__ as Record<string, Order>;
 }
 
 /**
