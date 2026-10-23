@@ -79,20 +79,20 @@ export default function HomePage() {
       {/* Hero Live Voice Cockpit */}
       <CallCockpit />
 
-      {/* Direct Quick Links to Multi-Page Suite */}
+      {/* Direct Customer Store Links */}
       <div style={{
         marginTop: '48px',
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
         gap: '16px'
       }}>
         <Link href="/orders" className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <div style={{ fontSize: '15px', fontWeight: 700, color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span>Live Order Management</span>
+            <span>Track & Manage Orders</span>
             <ArrowRight size={16} color="var(--gold-primary)" />
           </div>
           <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-            Inspect ORD-101, ORD-102, and ORD-103. Watch database status mutate live upon cancellation.
+            Inspect live shipments, dispatch carriers, and cancel eligible processing orders in real time.
           </p>
         </Link>
 
@@ -102,17 +102,7 @@ export default function HomePage() {
             <ArrowRight size={16} color="var(--gold-primary)" />
           </div>
           <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-            Review Aura&apos;s shipping rules, 7-day return policy, 48h damaged window, and COD rules.
-          </p>
-        </Link>
-
-        <Link href="/architecture" className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <div style={{ fontSize: '15px', fontWeight: 700, color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span>System Architecture Dossier</span>
-            <ArrowRight size={16} color="var(--gold-primary)" />
-          </div>
-          <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-            Detailed breakdown of voice pipeline, latency budget, and answers to Section 9 questions.
+            Review Aura&apos;s shipping rules, 7-day unopened return policy, 48h damaged window, and COD rules.
           </p>
         </Link>
       </div>

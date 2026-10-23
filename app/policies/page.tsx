@@ -268,7 +268,7 @@ export default function PoliciesPage() {
         <div style={{ marginBottom: '40px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '18px' }}>
             <Compass size={20} color="var(--gold-primary)" />
-            <h2 style={{ fontSize: '22px', fontWeight: 700, color: '#FFF' }}>Core Policy Matrix (DataStraw Specification)</h2>
+            <h2 style={{ fontSize: '22px', fontWeight: 700, color: '#FFF' }}>Core Brand Policy Matrix</h2>
           </div>
 
           <div style={{

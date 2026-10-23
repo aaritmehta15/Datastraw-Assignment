@@ -40,7 +40,7 @@ export default function RootLayout({
             gap: '12px'
           }}>
             <div>
-              <span style={{ color: 'var(--text-secondary)' }}>Aura Skincare CX Platform</span> — Designed for Datastraw AI+Tech Assessment
+              <span style={{ color: 'var(--text-secondary)' }}>Aura Skincare CX Platform</span> • Pure Organic Botanical Care • Aria Voice Concierge
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
               <span>Persona: <strong style={{ color: 'var(--gold-primary)' }}>Aria (en-IN)</strong></span>

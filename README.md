@@ -175,7 +175,7 @@ The application is fully optimized for Vercel:
 
 ## 9. Assessment Submission Deliverables (Section 10)
 
-- **Public Application URL:** `[Live Vercel Deployment Link]`
+- **Public Application URL:** [https://datastraw-assignment.vercel.app](https://datastraw-assignment.vercel.app)
 - **GitHub Repository:** [https://github.com/aaritmehta15/Datastraw-Assignment](https://github.com/aaritmehta15/Datastraw-Assignment)
 - **Demo Video Walkthrough (3–5 min):** `[Video Recording Link]`  
   *(Demonstrating live speech recognition, ORD-101 tracking, ORD-101 dispatched refusal, ORD-103 cancellation mutation, active barge-in interruption, and post-call JSON summary)*
