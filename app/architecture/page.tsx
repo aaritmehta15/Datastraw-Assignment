@@ -1,6 +1,19 @@
-'use client';
-
-import { Cpu, ArrowLeft, Zap, ShieldCheck, Layers, GitBranch, Terminal, CheckCircle2 } from 'lucide-react';
+import {
+  Cpu,
+  ArrowLeft,
+  Zap,
+  ShieldCheck,
+  Layers,
+  GitBranch,
+  Terminal,
+  CheckCircle2,
+  XCircle,
+  Code2,
+  Mic,
+  Search,
+  ArrowRight,
+  Volume2
+} from 'lucide-react';
 import Link from 'next/link';
 
 export default function ArchitecturePage() {
@@ -168,6 +181,135 @@ export default function ArchitecturePage() {
 │ 9. [Post-Call Telemetry]        -> Produces structured CRM JSON outcome     │
 └─────────────────────────────────────────────────────────────────────────────┘`}
         </pre>
+      </div>
+
+      {/* Policy Engine Guardrail Architecture: Probabilistic LLM vs Deterministic State Machine */}
+      <div className="glass-card" style={{ marginBottom: '36px', padding: '28px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+          <Code2 size={22} color="var(--gold-primary)" />
+          <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#FFFFFF' }}>
+            Why Code Guardrails Win Over Generic LLM Prompts
+          </h2>
+        </div>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '14px', lineHeight: 1.6, marginBottom: '22px' }}>
+          Standard chatbots often succumb to customer pressure or hallucinate unauthorized refunds when given complex prompts. In Aura Skincare&apos;s architecture, all business rules are enforced <strong>deterministically in TypeScript before the voice layer speaks</strong>:
+        </p>
+
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+          gap: '16px',
+          marginBottom: '24px'
+        }}>
+          {/* Vulnerable Probabilistic Approach */}
+          <div style={{
+            background: 'rgba(239, 68, 68, 0.08)',
+            border: '1px solid rgba(239, 68, 68, 0.25)',
+            padding: '20px',
+            borderRadius: 'var(--radius-md)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#F87171', marginBottom: '10px', fontWeight: 700, fontSize: '14px' }}>
+              <XCircle size={16} />
+              <span>Vulnerable: Pure Probabilistic LLM</span>
+            </div>
+            <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+              <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <XCircle size={14} color="#EF4444" style={{ flexShrink: 0 }} />
+                <span>Relies solely on system prompt guidelines.</span>
+              </li>
+              <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <XCircle size={14} color="#EF4444" style={{ flexShrink: 0 }} />
+                <span>Customers can socially engineer refunds (&quot;I know your CEO&quot;).</span>
+              </li>
+              <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <XCircle size={14} color="#EF4444" style={{ flexShrink: 0 }} />
+                <span>Hallucinates fake tracking numbers for non-existent orders.</span>
+              </li>
+              <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <XCircle size={14} color="#EF4444" style={{ flexShrink: 0 }} />
+                <span>Agrees to cancel orders that are already on the delivery truck.</span>
+              </li>
+            </ul>
+          </div>
+
+          {/* Hardened Deterministic State Machine */}
+          <div style={{
+            background: 'rgba(16, 185, 129, 0.08)',
+            border: '1px solid rgba(16, 185, 129, 0.3)',
+            padding: '20px',
+            borderRadius: 'var(--radius-md)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--emerald-accent)', marginBottom: '10px', fontWeight: 700, fontSize: '14px' }}>
+              <CheckCircle2 size={16} />
+              <span>Aura Skincare: Deterministic State Machine</span>
+            </div>
+            <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+              <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <CheckCircle2 size={14} color="#10B981" style={{ flexShrink: 0 }} />
+                <span>Tool execution strictly gated by code conditions.</span>
+              </li>
+              <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <CheckCircle2 size={14} color="#10B981" style={{ flexShrink: 0 }} />
+                <span>ORD-101 cancellation is physically rejected in `orderDatabase.ts`.</span>
+              </li>
+              <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <CheckCircle2 size={14} color="#10B981" style={{ flexShrink: 0 }} />
+                <span>Spoken variations (&quot;order 101&quot;, &quot;ORD one zero one&quot;) canonicalized by regex.</span>
+              </li>
+              <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <CheckCircle2 size={14} color="#10B981" style={{ flexShrink: 0 }} />
+                <span>Out-of-scope intent classifier deflects flight/external queries immediately.</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        {/* End-to-End Decision Flow */}
+        <div style={{
+          padding: '16px 20px',
+          borderRadius: 'var(--radius-sm)',
+          background: 'rgba(7, 25, 18, 0.7)',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          textAlign: 'center'
+        }}>
+          <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--gold-light)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '12px' }}>
+            End-to-End Decision & Voice Flow
+          </div>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '12px',
+            flexWrap: 'wrap',
+            fontFamily: 'var(--font-mono)',
+            fontSize: '12px'
+          }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: 'var(--radius-sm)', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}>
+              <Mic size={14} />
+              <span>Speech (en-IN)</span>
+            </span>
+            <ArrowRight size={14} color="var(--gold-primary)" />
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: 'var(--radius-sm)', background: 'rgba(212,175,55,0.1)', border: '1px solid var(--gold-primary)', color: 'var(--gold-light)' }}>
+              <Search size={14} />
+              <span>Regex Normalizer</span>
+            </span>
+            <ArrowRight size={14} color="var(--gold-primary)" />
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: 'var(--radius-sm)', background: 'rgba(16,185,129,0.1)', border: '1px solid var(--emerald-accent)', color: 'var(--emerald-accent)' }}>
+              <ShieldCheck size={14} />
+              <span>Policy Gate</span>
+            </span>
+            <ArrowRight size={14} color="var(--gold-primary)" />
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: 'var(--radius-sm)', background: 'rgba(139,92,246,0.1)', border: '1px solid #8B5CF6', color: '#DDD6FE' }}>
+              <Terminal size={14} />
+              <span>Tool Calling</span>
+            </span>
+            <ArrowRight size={14} color="var(--gold-primary)" />
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: 'var(--radius-sm)', background: 'rgba(212,175,55,0.15)', border: '1px solid var(--gold-primary)', color: '#FFF' }}>
+              <Volume2 size={14} />
+              <span>NeerjaNeural Audio</span>
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Section 9 Question & Answer Cards */}

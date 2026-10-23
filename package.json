@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "test": "npx tsx scripts/test-engine.mjs && npx tsx scripts/test-api.mjs"
   },
   "repository": {
     "type": "git",

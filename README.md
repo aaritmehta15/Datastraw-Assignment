@@ -150,6 +150,9 @@ npm install
 # (Optional) Copy environment template for live cloud LLM keys
 cp .env.example .env.local
 
+# Run automated verification test suite (50/50 tests)
+npm test
+
 # Run development server
 npm run dev
 ```
