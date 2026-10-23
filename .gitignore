@@ -37,3 +37,8 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# Local Candidate Notes & Private Pitch Scripts
+DEMO_RECORDING_SCRIPT.md
+CANDIDATE_NOTES.md
+scratch/

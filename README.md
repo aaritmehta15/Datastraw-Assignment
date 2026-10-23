@@ -170,12 +170,12 @@ The application is fully optimized for Vercel:
 
 ---
 
-## 9. 3–5 Minute Evaluation Demo Video Script
+## 9. Assessment Submission Deliverables (Section 10)
 
-| Timestamp | Screen / Action | Script / Voiceover |
-| :--- | :--- | :--- |
-| **0:00 – 0:45** | Home Page / Voice Studio | *"Hello! This is Aria, an enterprise AI Voice CX Agent built for Aura Skincare. Notice the clean luxury botanical UI and the reactive 60fps audio waveform. When I click Start Call, Aria greets us in a natural Indian English voice."* |
-| **0:45 – 1:30** | Order Tracking & Live OMS | *"Let's test order lookup: 'Where is my order ORD-101?' Aria triggers the get_order_details tool, confirms Priya Sharma's order, and informs us BlueDart will deliver it by 6 PM today."* |
-| **1:30 – 2:30** | Brand Guardrail Enforcement | *"Now let's test strict policy guardrails. If I ask to cancel ORD-101, Aria explains it cannot be cancelled because it is Out for Delivery, and advises doorstep refusal. If I ask to return ORD-102, she politely denies it because it was delivered 14 days ago, exceeding the 7-day unopened policy."* |
-| **2:30 – 3:15** | State Mutation & Interruption | *"Now let's test cancellation on ORD-103: 'Cancel ORD-103'. Aria confirms cancellation. Notice when we switch to the Live Orders page, ORD-103 has mutated to Cancelled in real time! Also notice when she speaks, I can interrupt her mid-sentence and she stops instantly."* |
-| **3:15 – 4:00** | Post-Call Summary & Architecture | *"When I click End Call, the system automatically presents the structured JSON telemetry matching Section 2.D with customer intent, sentiment, and resolution status, with a one-click copy button. Finally, the Architecture page outlines our latency waterfall and answers to Section 9. Thank you!"* |
+- **Public Application URL:** `[Live Vercel Deployment Link]`
+- **GitHub Repository:** [https://github.com/aaritmehta15/Datastraw-Assignment](https://github.com/aaritmehta15/Datastraw-Assignment)
+- **Demo Video Walkthrough (3–5 min):** `[Video Recording Link]`  
+  *(Demonstrating live speech recognition, ORD-101 tracking, ORD-101 dispatched refusal, ORD-103 cancellation mutation, active barge-in interruption, and post-call JSON summary)*
+- **Short Approach Note:** Documented in Section 1 above.
+- **Section 9 "Tell Us How You Think":** Detailed answers documented in Section 5 above.
+- **Candidate LinkedIn Profile:** `[LinkedIn Profile URL]`

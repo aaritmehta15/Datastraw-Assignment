@@ -112,7 +112,7 @@ const POLICY_SCENARIOS: PolicyScenario[] = [
 
 export default function PoliciesPage() {
   const [selectedScenario, setSelectedScenario] = useState<PolicyScenario>(POLICY_SCENARIOS[0]);
-  const [activeTab, setActiveTab] = useState<'all' | 'simulator' | 'architecture'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'simulator'>('all');
 
   const getPolicyIcon = (category: string) => {
     switch (category) {
@@ -144,10 +144,10 @@ export default function PoliciesPage() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
           <div>
             <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '36px', fontWeight: 800, color: '#FFFFFF', marginBottom: '8px' }}>
-              Brand Knowledge & Policy Architecture
+              Brand Policies & Knowledge Center
             </h1>
             <p style={{ color: 'var(--text-secondary)', fontSize: '15px', maxWidth: '780px' }}>
-              Explore the deterministic business rules, hard guardrails, and real-time state machines that govern Aria&apos;s voice decisions for Aura Skincare.
+              Official brand policies governing shipping, cancellations, unopened returns, and COD thresholds for Aura Skincare customers.
             </p>
           </div>
 
@@ -196,25 +196,6 @@ export default function PoliciesPage() {
             >
               <Sliders size={14} />
               <span>Live Policy Simulator</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('architecture')}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '8px 18px',
-                borderRadius: 'var(--radius-full)',
-                fontSize: '13px',
-                fontWeight: 600,
-                background: activeTab === 'architecture' ? 'var(--gold-primary)' : 'transparent',
-                color: activeTab === 'architecture' ? '#071912' : 'var(--text-secondary)',
-                transition: 'all 0.2s ease',
-                cursor: 'pointer'
-              }}
-            >
-              <ShieldCheck size={14} />
-              <span>How It Works Underneath</span>
             </button>
           </div>
         </div>
@@ -539,136 +520,7 @@ export default function PoliciesPage() {
             {/* Rationale & Guardrail Explanation */}
             <div style={{ fontSize: '13px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <ShieldCheck size={16} color="var(--emerald-accent)" />
-              <span><strong>Guardrail Rationale:</strong> {selectedScenario.rationale}</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── TAB 3: HOW IT WORKS UNDERNEATH (ARCHITECTURE COMPARISON) ─────────── */}
-      {(activeTab === 'all' || activeTab === 'architecture') && (
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '18px' }}>
-            <Code2 size={20} color="var(--gold-primary)" />
-            <h2 style={{ fontSize: '22px', fontWeight: 700, color: '#FFF' }}>How the Policy Engine Works Underneath</h2>
-          </div>
-
-          {/* Architecture comparison: Probabilistic LLM vs Deterministic Code */}
-          <div className="glass-card" style={{ padding: '28px', marginBottom: '24px' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#FFF', marginBottom: '12px' }}>
-              Why Code Guardrails Win Over Generic LLM Prompts
-            </h3>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '14px', lineHeight: 1.6, marginBottom: '20px' }}>
-              Standard chatbots often succumb to customer pressure or hallucinate unauthorized refunds when given complex prompts. In Aura Skincare&apos;s architecture, all business rules are enforced <strong>deterministically in TypeScript before the voice layer speaks</strong>:
-            </p>
-
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-              gap: '16px'
-            }}>
-              {/* Bad approach */}
-              <div style={{
-                background: 'rgba(239, 68, 68, 0.08)',
-                border: '1px solid rgba(239, 68, 68, 0.25)',
-                padding: '20px',
-                borderRadius: 'var(--radius-md)'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#F87171', marginBottom: '8px', fontWeight: 700, fontSize: '14px' }}>
-                  <XCircle size={16} />
-                  <span>Vulnerable: Pure Probabilistic LLM</span>
-                </div>
-                <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                  <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <XCircle size={14} color="#EF4444" style={{ flexShrink: 0 }} />
-                    <span>Relies solely on system prompt guidelines.</span>
-                  </li>
-                  <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <XCircle size={14} color="#EF4444" style={{ flexShrink: 0 }} />
-                    <span>Customers can socially engineer refunds (&quot;I know your CEO&quot;).</span>
-                  </li>
-                  <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <XCircle size={14} color="#EF4444" style={{ flexShrink: 0 }} />
-                    <span>Hallucinates fake tracking numbers for non-existent orders.</span>
-                  </li>
-                  <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <XCircle size={14} color="#EF4444" style={{ flexShrink: 0 }} />
-                    <span>Agrees to cancel orders that are already on the delivery truck.</span>
-                  </li>
-                </ul>
-              </div>
-
-              {/* Our approach */}
-              <div style={{
-                background: 'rgba(16, 185, 129, 0.08)',
-                border: '1px solid rgba(16, 185, 129, 0.3)',
-                padding: '20px',
-                borderRadius: 'var(--radius-md)'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--emerald-accent)', marginBottom: '8px', fontWeight: 700, fontSize: '14px' }}>
-                  <CheckCircle2 size={16} />
-                  <span>Aura Skincare: Deterministic State Machine</span>
-                </div>
-                <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                  <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <CheckCircle2 size={14} color="#10B981" style={{ flexShrink: 0 }} />
-                    <span>Tool execution strictly gated by code conditions.</span>
-                  </li>
-                  <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <CheckCircle2 size={14} color="#10B981" style={{ flexShrink: 0 }} />
-                    <span>ORD-101 cancellation is physically rejected in `orderDatabase.ts`.</span>
-                  </li>
-                  <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <CheckCircle2 size={14} color="#10B981" style={{ flexShrink: 0 }} />
-                    <span>Spoken variations (&quot;order 101&quot;, &quot;ORD one zero one&quot;) canonicalized by regex.</span>
-                  </li>
-                  <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <CheckCircle2 size={14} color="#10B981" style={{ flexShrink: 0 }} />
-                    <span>Out-of-scope intent classifier deflects flight/external queries immediately.</span>
-                  </li>
-                </ul>
-              </div>
-            </div>
-          </div>
-
-          {/* Flowchart Diagram */}
-          <div className="glass-card" style={{ padding: '24px', textAlign: 'center' }}>
-            <h4 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--gold-light)', marginBottom: '14px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              End-to-End Decision & Voice Flow
-            </h4>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '12px',
-              flexWrap: 'wrap',
-              fontFamily: 'var(--font-mono)',
-              fontSize: '12px'
-            }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: 'var(--radius-sm)', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}>
-                <Mic size={14} />
-                <span>Speech (en-IN)</span>
-              </span>
-              <ArrowRight size={14} color="var(--gold-primary)" />
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: 'var(--radius-sm)', background: 'rgba(212,175,55,0.1)', border: '1px solid var(--gold-primary)', color: 'var(--gold-light)' }}>
-                <Search size={14} />
-                <span>Regex Normalizer</span>
-              </span>
-              <ArrowRight size={14} color="var(--gold-primary)" />
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: 'var(--radius-sm)', background: 'rgba(16,185,129,0.1)', border: '1px solid var(--emerald-accent)', color: 'var(--emerald-accent)' }}>
-                <ShieldCheck size={14} />
-                <span>Policy Gate</span>
-              </span>
-              <ArrowRight size={14} color="var(--gold-primary)" />
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: 'var(--radius-sm)', background: 'rgba(139,92,246,0.1)', border: '1px solid #8B5CF6', color: '#DDD6FE' }}>
-                <Terminal size={14} />
-                <span>Tool Calling</span>
-              </span>
-              <ArrowRight size={14} color="var(--gold-primary)" />
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: 'var(--radius-sm)', background: 'rgba(212,175,55,0.15)', border: '1px solid var(--gold-primary)', color: '#FFF' }}>
-                <Volume2 size={14} />
-                <span>NeerjaNeural Audio</span>
-              </span>
+              <span><strong>Policy Rule:</strong> {selectedScenario.rationale}</span>
             </div>
           </div>
         </div>
