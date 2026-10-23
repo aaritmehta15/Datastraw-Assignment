@@ -9,6 +9,7 @@ import {
   CreditCard,
   AlertTriangle,
   ArrowLeft,
+  ArrowRight,
   CheckCircle2,
   XCircle,
   Sparkles,
@@ -16,7 +17,13 @@ import {
   Code2,
   Compass,
   HelpCircle,
-  Play
+  Play,
+  BookOpen,
+  Sliders,
+  Mic,
+  Search,
+  Volume2,
+  Terminal
 } from 'lucide-react';
 import Link from 'next/link';
 import { BRAND_POLICIES, AURA_BRAND_OVERVIEW } from '@/lib/brandKnowledge';
@@ -155,44 +162,59 @@ export default function PoliciesPage() {
             <button
               onClick={() => setActiveTab('all')}
               style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
                 padding: '8px 18px',
                 borderRadius: 'var(--radius-full)',
                 fontSize: '13px',
                 fontWeight: 600,
                 background: activeTab === 'all' ? 'var(--gold-primary)' : 'transparent',
                 color: activeTab === 'all' ? '#071912' : 'var(--text-secondary)',
-                transition: 'all 0.2s ease'
+                transition: 'all 0.2s ease',
+                cursor: 'pointer'
               }}
             >
-              📖 Brand Policies
+              <BookOpen size={14} />
+              <span>Brand Policies</span>
             </button>
             <button
               onClick={() => setActiveTab('simulator')}
               style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
                 padding: '8px 18px',
                 borderRadius: 'var(--radius-full)',
                 fontSize: '13px',
                 fontWeight: 600,
                 background: activeTab === 'simulator' ? 'var(--gold-primary)' : 'transparent',
                 color: activeTab === 'simulator' ? '#071912' : 'var(--text-secondary)',
-                transition: 'all 0.2s ease'
+                transition: 'all 0.2s ease',
+                cursor: 'pointer'
               }}
             >
-              ⚡ Live Policy Simulator
+              <Sliders size={14} />
+              <span>Live Policy Simulator</span>
             </button>
             <button
               onClick={() => setActiveTab('architecture')}
               style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
                 padding: '8px 18px',
                 borderRadius: 'var(--radius-full)',
                 fontSize: '13px',
                 fontWeight: 600,
                 background: activeTab === 'architecture' ? 'var(--gold-primary)' : 'transparent',
                 color: activeTab === 'architecture' ? '#071912' : 'var(--text-secondary)',
-                transition: 'all 0.2s ease'
+                transition: 'all 0.2s ease',
+                cursor: 'pointer'
               }}
             >
-              🛡️ How It Works Underneath
+              <ShieldCheck size={14} />
+              <span>How It Works Underneath</span>
             </button>
           </div>
         </div>
@@ -557,10 +579,22 @@ export default function PoliciesPage() {
                   <span>Vulnerable: Pure Probabilistic LLM</span>
                 </div>
                 <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                  <li>❌ Relies solely on system prompt guidelines.</li>
-                  <li>❌ Customers can socially engineer refunds (&quot;I know your CEO&quot;).</li>
-                  <li>❌ Hallucinates fake tracking numbers for non-existent orders.</li>
-                  <li>❌ Agrees to cancel orders that are already on the delivery truck.</li>
+                  <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <XCircle size={14} color="#EF4444" style={{ flexShrink: 0 }} />
+                    <span>Relies solely on system prompt guidelines.</span>
+                  </li>
+                  <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <XCircle size={14} color="#EF4444" style={{ flexShrink: 0 }} />
+                    <span>Customers can socially engineer refunds (&quot;I know your CEO&quot;).</span>
+                  </li>
+                  <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <XCircle size={14} color="#EF4444" style={{ flexShrink: 0 }} />
+                    <span>Hallucinates fake tracking numbers for non-existent orders.</span>
+                  </li>
+                  <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <XCircle size={14} color="#EF4444" style={{ flexShrink: 0 }} />
+                    <span>Agrees to cancel orders that are already on the delivery truck.</span>
+                  </li>
                 </ul>
               </div>
 
@@ -576,10 +610,22 @@ export default function PoliciesPage() {
                   <span>Aura Skincare: Deterministic State Machine</span>
                 </div>
                 <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                  <li>✅ Tool execution strictly gated by code conditions.</li>
-                  <li>✅ ORD-101 cancellation is physically rejected in `orderDatabase.ts`.</li>
-                  <li>✅ Spoken variations (&quot;order 101&quot;, &quot;ORD one zero one&quot;) canonicalized by regex.</li>
-                  <li>✅ Out-of-scope intent classifier deflects flight/external queries immediately.</li>
+                  <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <CheckCircle2 size={14} color="#10B981" style={{ flexShrink: 0 }} />
+                    <span>Tool execution strictly gated by code conditions.</span>
+                  </li>
+                  <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <CheckCircle2 size={14} color="#10B981" style={{ flexShrink: 0 }} />
+                    <span>ORD-101 cancellation is physically rejected in `orderDatabase.ts`.</span>
+                  </li>
+                  <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <CheckCircle2 size={14} color="#10B981" style={{ flexShrink: 0 }} />
+                    <span>Spoken variations (&quot;order 101&quot;, &quot;ORD one zero one&quot;) canonicalized by regex.</span>
+                  </li>
+                  <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <CheckCircle2 size={14} color="#10B981" style={{ flexShrink: 0 }} />
+                    <span>Out-of-scope intent classifier deflects flight/external queries immediately.</span>
+                  </li>
                 </ul>
               </div>
             </div>
@@ -599,24 +645,29 @@ export default function PoliciesPage() {
               fontFamily: 'var(--font-mono)',
               fontSize: '12px'
             }}>
-              <span style={{ padding: '8px 14px', borderRadius: 'var(--radius-sm)', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}>
-                🎙️ Speech (en-IN)
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: 'var(--radius-sm)', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                <Mic size={14} />
+                <span>Speech (en-IN)</span>
               </span>
-              <span style={{ color: 'var(--gold-primary)' }}>➔</span>
-              <span style={{ padding: '8px 14px', borderRadius: 'var(--radius-sm)', background: 'rgba(212,175,55,0.1)', border: '1px solid var(--gold-primary)', color: 'var(--gold-light)' }}>
-                🔍 Regex Normalizer
+              <ArrowRight size={14} color="var(--gold-primary)" />
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: 'var(--radius-sm)', background: 'rgba(212,175,55,0.1)', border: '1px solid var(--gold-primary)', color: 'var(--gold-light)' }}>
+                <Search size={14} />
+                <span>Regex Normalizer</span>
               </span>
-              <span style={{ color: 'var(--gold-primary)' }}>➔</span>
-              <span style={{ padding: '8px 14px', borderRadius: 'var(--radius-sm)', background: 'rgba(16,185,129,0.1)', border: '1px solid var(--emerald-accent)', color: 'var(--emerald-accent)' }}>
-                🛡️ Policy Gate
+              <ArrowRight size={14} color="var(--gold-primary)" />
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: 'var(--radius-sm)', background: 'rgba(16,185,129,0.1)', border: '1px solid var(--emerald-accent)', color: 'var(--emerald-accent)' }}>
+                <ShieldCheck size={14} />
+                <span>Policy Gate</span>
               </span>
-              <span style={{ color: 'var(--gold-primary)' }}>➔</span>
-              <span style={{ padding: '8px 14px', borderRadius: 'var(--radius-sm)', background: 'rgba(139,92,246,0.1)', border: '1px solid #8B5CF6', color: '#DDD6FE' }}>
-                ⚡ Tool Calling
+              <ArrowRight size={14} color="var(--gold-primary)" />
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: 'var(--radius-sm)', background: 'rgba(139,92,246,0.1)', border: '1px solid #8B5CF6', color: '#DDD6FE' }}>
+                <Terminal size={14} />
+                <span>Tool Calling</span>
               </span>
-              <span style={{ color: 'var(--gold-primary)' }}>➔</span>
-              <span style={{ padding: '8px 14px', borderRadius: 'var(--radius-sm)', background: 'rgba(212,175,55,0.15)', border: '1px solid var(--gold-primary)', color: '#FFF' }}>
-                🔊 NeerjaNeural Voice
+              <ArrowRight size={14} color="var(--gold-primary)" />
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: 'var(--radius-sm)', background: 'rgba(212,175,55,0.15)', border: '1px solid var(--gold-primary)', color: '#FFF' }}>
+                <Volume2 size={14} />
+                <span>NeerjaNeural Audio</span>
               </span>
             </div>
           </div>

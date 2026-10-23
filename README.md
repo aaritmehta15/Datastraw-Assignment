@@ -14,18 +14,18 @@
 
 ## 2. Key Capabilities & "Beyond the Basics" Features
 
-| Requirement / Feature | Implementation Status | Technical Details |
+| Requirement / Feature | Status | Technical Details |
 | :--- | :--- | :--- |
-| **🎙️ Voice Conversation** | ✅ Complete | Continuous browser speech recognition configured for `en-IN` Indian English. |
-| **🗣️ Indian Voice Persona** | ✅ Complete | Warm Indian neural voice (*Aria*) pronouncing Indian names and currency (*Rupees*) naturally. |
-| **⚡ Sub-Second Latency** | ✅ Complete | ~775ms round-trip latency budget (VAD 220ms, STT 180ms, LLM/Tool 240ms, TTS 120ms). |
-| **🛑 Active Barge-In (Interruption)** | ✅ Section 8 Bonus | Speech detection immediately halts ongoing audio playback when the customer speaks. |
-| **📦 Live Function Calling** | ✅ Complete | Real-time tool execution (`get_order_details`, `cancel_order`) with in-memory persistence. |
-| **🛡️ Policy Guardrails in Code** | ✅ Complete | Returns and cancellations validated deterministically; model cannot override policy. |
-| **🔍 Regex Order Normalizer** | ✅ Section 8 Bonus | Parses spoken variants (*"order 101"*, *"ORD one zero one"*, *"o r d 101"*) into `ORD-101`. |
-| **📊 Post-Call JSON Summary** | ✅ Complete | Structured CRM telemetry (intent, order ID, resolution status, executive summary, sentiment). |
-| **🧪 Evaluator 1-Click Helper** | ✅ Complete | Visible on-screen scenario chips testing ORD-101, ORD-102, ORD-103, ORD-999, and Out of Scope. |
-| **🖥️ Multi-Page Operations Suite** | ✅ Complete | Dedicated pages for Voice Studio (`/`), Live Orders (`/orders`), Brand Policies (`/policies`), Analytics (`/analytics`), and Architecture (`/architecture`). |
+| **Voice Conversation** | Completed | Continuous browser speech recognition configured for `en-IN` Indian English. |
+| **Indian Voice Persona** | Completed | Warm Indian neural voice (*Aria*) pronouncing Indian names and currency (*Rupees*) naturally. |
+| **Sub-Second Latency Budget** | Completed | ~775ms round-trip latency budget (VAD 220ms, STT 180ms, LLM/Tool 240ms, TTS 120ms). |
+| **Active Barge-In (Interruption)** | Section 8 Bonus | Speech detection immediately halts ongoing audio playback when the customer speaks. |
+| **Live Function Calling** | Completed | Real-time tool execution (`get_order_details`, `cancel_order`) with in-memory persistence. |
+| **Policy Guardrails in Code** | Completed | Returns and cancellations validated deterministically; model cannot override policy. |
+| **Regex Order Normalizer** | Section 8 Bonus | Parses spoken variants (*"order 101"*, *"ORD one zero one"*, *"o r d 101"*) into `ORD-101`. |
+| **Post-Call Structured Telemetry** | Completed | Structured CRM telemetry (intent, order ID, resolution status, executive summary, sentiment). |
+| **Evaluator Scenario Suite** | Completed | Visible on-screen scenario chips testing ORD-101, ORD-102, ORD-103, ORD-999, and Out of Scope. |
+| **Modular Operations Console** | Completed | Dedicated pages for Voice Studio (`/`), Live Orders (`/orders`), Brand Policies (`/policies`), Analytics (`/analytics`), and Architecture (`/architecture`). |
 
 ---
 
@@ -119,16 +119,16 @@ npx tsx scripts/test-api.mjs
 ```
 
 ### Verified Test Matrix:
-- ✅ Canonical & spoken regex normalization (`"ord 101"`, `"ORD one zero three"`, `"o r d 101"` $\to$ `ORD-101`).
-- ✅ `ORD-101` tracking lookup (BlueDart, Out for Delivery by 6 PM).
-- ✅ `ORD-101` cancellation rejection with doorstep refusal advice.
-- ✅ `ORD-102` delivered status lookup (Delhivery, delivered 14 days ago).
-- ✅ `ORD-102` return rejection due to 7-day unopened policy expiration.
-- ✅ `ORD-103` cancellation approval and in-memory status mutation from `Processing` $\to$ `Cancelled`.
-- ✅ Graceful error recovery for `ORD-999` (non-existent order).
-- ✅ Out-of-scope inquiry boundary enforcement (*"Book a flight to Goa"*).
-- ✅ Voice AST normalization (stripping markdown, ₹ $\to$ Rupees).
-- ✅ Structured JSON call summary generation matching Section 2.D schema.
+- **PASS**: Canonical & spoken regex normalization (`"ord 101"`, `"ORD one zero three"`, `"o r d 101"` $\to$ `ORD-101`).
+- **PASS**: `ORD-101` tracking lookup (BlueDart, Out for Delivery by 6 PM).
+- **PASS**: `ORD-101` cancellation rejection with doorstep refusal advice.
+- **PASS**: `ORD-102` delivered status lookup (Delhivery, delivered 14 days ago).
+- **PASS**: `ORD-102` return rejection due to 7-day unopened policy expiration.
+- **PASS**: `ORD-103` cancellation approval and in-memory status mutation from `Processing` $\to$ `Cancelled`.
+- **PASS**: Graceful error recovery for `ORD-999` (non-existent order).
+- **PASS**: Out-of-scope inquiry boundary enforcement (*"Book a flight to Goa"*).
+- **PASS**: Voice AST normalization (stripping markdown, ₹ $\to$ Rupees).
+- **PASS**: Structured JSON call summary generation matching Section 2.D schema.
 
 ---
 

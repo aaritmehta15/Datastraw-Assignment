@@ -22,12 +22,12 @@ import Link from 'next/link';
 import { Order, OrderStatus } from '@/lib/types';
 
 const PRODUCT_CATALOG = [
-  { name: 'Vitamin C Glow Serum (30ml)', defaultPrice: 699, icon: '🧴' },
-  { name: 'Hydrating Sunscreen SPF 50', defaultPrice: 499, icon: '☀️' },
-  { name: 'Green Tea Face Wash + Toner', defaultPrice: 850, icon: '🍵' },
-  { name: 'Kumkumadi Night Oil (15ml)', defaultPrice: 1299, icon: '🌿' },
-  { name: 'Ceramide Barrier Cream', defaultPrice: 749, icon: '🥑' },
-  { name: 'Rosewater Balancing Mist', defaultPrice: 399, icon: '🌹' },
+  { name: 'Vitamin C Glow Serum (30ml)', defaultPrice: 699, category: 'Serum' },
+  { name: 'Hydrating Sunscreen SPF 50', defaultPrice: 499, category: 'SPF 50' },
+  { name: 'Green Tea Face Wash + Toner', defaultPrice: 850, category: 'Cleanser' },
+  { name: 'Kumkumadi Night Oil (15ml)', defaultPrice: 1299, category: 'Oil' },
+  { name: 'Ceramide Barrier Cream', defaultPrice: 749, category: 'Cream' },
+  { name: 'Rosewater Balancing Mist', defaultPrice: 399, category: 'Mist' },
 ];
 
 const PRESET_CUSTOMERS = ['Pooja Hegde', 'Vikram Mehra', 'Aditi Rao', 'Sameer Khan', 'Deepika Sen'];
@@ -605,7 +605,17 @@ export default function OrdersPage() {
                           transition: 'all 0.15s ease'
                         }}
                       >
-                        <span style={{ fontSize: '16px' }}>{prod.icon}</span>
+                        <div style={{
+                          fontSize: '10px',
+                          fontWeight: 700,
+                          padding: '3px 7px',
+                          borderRadius: '4px',
+                          background: 'rgba(212, 175, 55, 0.15)',
+                          color: 'var(--gold-light)',
+                          letterSpacing: '0.04em'
+                        }}>
+                          {prod.category}
+                        </div>
                         <div>
                           <div style={{ fontWeight: 600 }}>{prod.name}</div>
                           <div style={{ fontSize: '11px', color: 'var(--gold-primary)' }}>₹{prod.defaultPrice}</div>
@@ -657,22 +667,26 @@ export default function OrdersPage() {
                 {/* Live Policy Compliance Badges */}
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                   {formValue >= 499 ? (
-                    <span style={{ fontSize: '11px', padding: '4px 10px', borderRadius: 'var(--radius-full)', background: 'rgba(16,185,129,0.15)', color: '#10B981', border: '1px solid #10B981' }}>
-                      ✅ Free Delivery Applied (&gt; ₹499)
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '11px', padding: '4px 10px', borderRadius: 'var(--radius-full)', background: 'rgba(16,185,129,0.15)', color: '#10B981', border: '1px solid #10B981' }}>
+                      <CheckCircle2 size={12} />
+                      <span>Free Delivery Applied (&gt; ₹499)</span>
                     </span>
                   ) : (
-                    <span style={{ fontSize: '11px', padding: '4px 10px', borderRadius: 'var(--radius-full)', background: 'rgba(245,158,11,0.15)', color: '#F59E0B', border: '1px solid #F59E0B' }}>
-                      ⚠️ ₹50 Shipping Fee Applies (&lt; ₹499)
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '11px', padding: '4px 10px', borderRadius: 'var(--radius-full)', background: 'rgba(245,158,11,0.15)', color: '#F59E0B', border: '1px solid #F59E0B' }}>
+                      <AlertCircle size={12} />
+                      <span>₹50 Shipping Fee Applies (&lt; ₹499)</span>
                     </span>
                   )}
 
                   {formValue <= 2500 ? (
-                    <span style={{ fontSize: '11px', padding: '4px 10px', borderRadius: 'var(--radius-full)', background: 'rgba(56,189,248,0.15)', color: '#38BDF8', border: '1px solid #38BDF8' }}>
-                      💵 Cash on Delivery Eligible (≤ ₹2,500)
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '11px', padding: '4px 10px', borderRadius: 'var(--radius-full)', background: 'rgba(56,189,248,0.15)', color: '#38BDF8', border: '1px solid #38BDF8' }}>
+                      <CheckCircle2 size={12} />
+                      <span>Cash on Delivery Eligible (≤ ₹2,500)</span>
                     </span>
                   ) : (
-                    <span style={{ fontSize: '11px', padding: '4px 10px', borderRadius: 'var(--radius-full)', background: 'rgba(239,68,68,0.15)', color: '#EF4444', border: '1px solid #EF4444' }}>
-                      🚫 Exceeds ₹2,500 COD Limit (Prepaid Required)
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '11px', padding: '4px 10px', borderRadius: 'var(--radius-full)', background: 'rgba(239,68,68,0.15)', color: '#EF4444', border: '1px solid #EF4444' }}>
+                      <XCircle size={12} />
+                      <span>Exceeds ₹2,500 COD Limit (Prepaid Required)</span>
                     </span>
                   )}
                 </div>

@@ -249,7 +249,7 @@ The project is structured into **6 modular execution chunks**. Each chunk is sel
 #### CHUNK 4: Voice Studio Frontend (STT, Web Audio VAD, Barge-in, Waveform)
 - Build `components/CallCockpit.tsx`:
   - Start Call / End Call action buttons.
-  - Live visual state badges: 🟢 `Listening` | 🟡 `Thinking` | 🟣 `Speaking`.
+  - Live visual state badges: `Listening` (Emerald) | `Thinking` (Amber) | `Speaking` (Purple).
   - Active call timer.
 - Build `components/AudioVisualizer.tsx`:
   - 60fps HTML5 Canvas frequency waveform reacting to microphone input and agent speech.

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Phone, PhoneOff, Sparkles, AlertCircle, Hand } from 'lucide-react';
+import { Phone, PhoneOff, Sparkles, AlertCircle, Hand, Clock, Mic } from 'lucide-react';
 import AudioVisualizer from './AudioVisualizer';
 import TranscriptStream from './TranscriptStream';
 import EvaluatorQuickTest from './EvaluatorQuickTest';
@@ -488,18 +488,27 @@ export default function CallCockpit() {
                   : 'var(--text-muted)',
               }}
             />
-            <span>
+            <span style={{ textTransform: 'uppercase' }}>
               {callState === 'idle' && 'READY TO CONNECT'}
-              {callState === 'listening' && '🎤 LISTENING — SPEAK FREELY'}
-              {callState === 'thinking' && '⚡ THINKING & VERIFYING DB'}
-              {callState === 'speaking' && '🔊 ARIA SPEAKING'}
+              {callState === 'listening' && 'LISTENING — SPEAK FREELY'}
+              {callState === 'thinking' && 'THINKING & VERIFYING DB'}
+              {callState === 'speaking' && 'ARIA SPEAKING'}
             </span>
           </div>
 
           {/* Timer + voice badge */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', fontWeight: 600, color: isCallActive ? 'var(--gold-primary)' : 'var(--text-secondary)' }}>
-              ⏱️ {fmt(duration)}
+            <span style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontFamily: 'var(--font-mono)',
+              fontSize: '13px',
+              fontWeight: 600,
+              color: isCallActive ? 'var(--gold-primary)' : 'var(--text-secondary)'
+            }}>
+              <Clock size={13} color="var(--gold-primary)" />
+              <span>{fmt(duration)}</span>
             </span>
 
             <div style={{
@@ -508,7 +517,8 @@ export default function CallCockpit() {
               background: 'rgba(212,175,55,0.12)', border: '1px solid var(--gold-primary)',
               fontSize: '12px', color: 'var(--gold-light)', fontWeight: 600,
             }}>
-              <span>🇮🇳 Aria · NeerjaNeural (en-IN)</span>
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--gold-primary)' }} />
+              <span>Aria • NeerjaNeural (en-IN)</span>
             </div>
           </div>
         </div>
@@ -566,8 +576,8 @@ export default function CallCockpit() {
                   opacity: callState === 'speaking' ? 1 : 0.4,
                 }}
               >
-                <Hand size={18} />
-                <span>{callState === 'speaking' ? '✋ Tap to Interrupt (Space)' : '🎤 Aria Listening'}</span>
+                {callState === 'speaking' ? <Hand size={18} /> : <Mic size={18} />}
+                <span>{callState === 'speaking' ? 'Tap to Interrupt (Space)' : 'Aria Listening'}</span>
               </button>
 
               {/* End Call Button */}
