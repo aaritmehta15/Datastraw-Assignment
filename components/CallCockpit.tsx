@@ -27,7 +27,7 @@ import { CallTranscriptTurn, StructuredCallSummary } from '@/lib/types';
 //     - No getUserMedia contention with SpeechRecognition.
 //       SpeechRecognition gets 100% exclusive access to the microphone.
 //     - 350ms acoustic settle window before microphone re-opens.
-//     - One-click or Spacebar barge-in to interrupt Aria at any time.
+//     - Stable, zero-layout-shift Interrupt button + Spacebar capture.
 // ─────────────────────────────────────────────────────────────────────────────
 
 type CallState = 'idle' | 'listening' | 'thinking' | 'speaking';
@@ -55,6 +55,7 @@ export default function CallCockpit() {
   const greetingBufferRef = useRef<ArrayBuffer | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const transcriptRef = useRef<CallTranscriptTurn[]>([]);
+  const lastInterruptTimeRef = useRef<number>(0);
 
   // Sync helper
   const syncCallState = useCallback((s: CallState) => {
@@ -262,9 +263,16 @@ export default function CallCockpit() {
   }, [stopAllAudio, syncCallState, getUnlockedAudioContext, startListening]);
 
   // ═══════════════════════════════════════════════════════════════════════════
-  //  BARGE-IN / INTERRUPT ARIA
+  //  BARGE-IN / INTERRUPT ARIA (STABLE & NEVER ACCIDENTALLY ENDS CALL)
   // ═══════════════════════════════════════════════════════════════════════════
-  const handleInterrupt = useCallback(() => {
+  const handleInterrupt = useCallback((e?: React.MouseEvent | KeyboardEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    // Record timestamp so handleEndCall can ignore any accidental mis-clicks
+    lastInterruptTimeRef.current = Date.now();
+
     if (callStateRef.current === 'speaking') {
       stopAllAudio();
       if (isCallActiveRef.current) {
@@ -273,18 +281,28 @@ export default function CallCockpit() {
         startListening();
       }
     }
+
+    // Always defocus any button so subsequent Spacebar presses don't click it
+    if (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
   }, [stopAllAudio, syncCallState, startListening]);
 
-  // Keyboard shortcut: Spacebar to interrupt while speaking
+  // Global Keyboard shortcut: Spacebar in CAPTURE phase to intercept cleanly
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'Space' && callStateRef.current === 'speaking' && isCallActiveRef.current) {
-        e.preventDefault();
-        handleInterrupt();
+      if (e.code === 'Space') {
+        if (isCallActiveRef.current) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (callStateRef.current === 'speaking') {
+            handleInterrupt(e);
+          }
+        }
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
   }, [handleInterrupt]);
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -361,6 +379,11 @@ export default function CallCockpit() {
   const handleStartCall = useCallback(async () => {
     stopAllAudio();
 
+    // Defocus starting button so Space key does not activate it
+    if (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+
     // CRITICAL: Unlock AudioContext synchronously inside user click
     await getUnlockedAudioContext();
 
@@ -384,9 +407,19 @@ export default function CallCockpit() {
   }, [stopAllAudio, getUnlockedAudioContext, playAriaAudio]);
 
   // ═══════════════════════════════════════════════════════════════════════════
-  //  END CALL
+  //  END CALL (with safety gate against accidental double-clicks from interrupt)
   // ═══════════════════════════════════════════════════════════════════════════
-  const handleEndCall = useCallback(async () => {
+  const handleEndCall = useCallback(async (e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+
+    // Safety gate: ignore accidental trigger if interrupt was tapped within last 800ms
+    if (Date.now() - lastInterruptTimeRef.current < 800) {
+      console.warn('[Call] Blocked accidental end-call immediately following interrupt');
+      return;
+    }
+
     isCallActiveRef.current = false;
     shouldBeListeningRef.current = false;
     if (recognitionRef.current) {
@@ -483,38 +516,12 @@ export default function CallCockpit() {
         {/* Waveform */}
         <AudioVisualizer state={callState} />
 
-        {/* Interrupt button (visible while Aria speaks during a call) */}
-        {callState === 'speaking' && isCallActive && (
-          <div style={{ marginTop: '16px' }}>
-            <button
-              onClick={handleInterrupt}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '8px 20px',
-                borderRadius: 'var(--radius-full)',
-                background: 'rgba(167, 139, 250, 0.25)',
-                border: '1px solid #A78BFA',
-                color: '#EDE9FE',
-                fontSize: '13px',
-                fontWeight: 600,
-                cursor: 'pointer',
-                boxShadow: '0 4px 15px rgba(167, 139, 250, 0.3)',
-                transition: 'all 0.2s ease',
-              }}
-            >
-              <Hand size={15} />
-              <span>Tap to Interrupt Aria (or press Space)</span>
-            </button>
-          </div>
-        )}
-
-        {/* Call buttons */}
-        <div style={{ marginTop: '32px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
+        {/* Stable Call Action Buttons (Zero Layout Shift) */}
+        <div style={{ marginTop: '32px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
           {!isCallActive ? (
             <button
               id="start-call-btn"
+              type="button"
               onClick={handleStartCall}
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: '12px',
@@ -530,22 +537,59 @@ export default function CallCockpit() {
               <span>Start Voice Call with Aria</span>
             </button>
           ) : (
-            <button
-              id="end-call-btn"
-              onClick={handleEndCall}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: '12px',
-                padding: '16px 40px', borderRadius: 'var(--radius-full)',
-                background: 'linear-gradient(135deg,#EF4444 0%,#DC2626 100%)',
-                color: '#FFF', fontSize: '16px', fontWeight: 700,
-                boxShadow: '0 8px 30px rgba(239,68,68,0.4)',
-                border: '1px solid rgba(255,255,255,0.2)',
-                cursor: 'pointer', transition: 'all 0.2s ease',
-              }}
-            >
-              <PhoneOff size={20} />
-              <span>End Call & Generate Summary</span>
-            </button>
+            <>
+              {/* Permanent, Side-by-Side Interrupt Button */}
+              <button
+                id="interrupt-btn"
+                type="button"
+                onClick={handleInterrupt}
+                disabled={callState !== 'speaking'}
+                title={callState === 'speaking' ? 'Interrupt Aria and speak' : 'Aria is currently listening'}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '16px 28px',
+                  borderRadius: 'var(--radius-full)',
+                  background: callState === 'speaking'
+                    ? 'linear-gradient(135deg, #8B5CF6 0%, #6D28D9 100%)'
+                    : 'rgba(255, 255, 255, 0.05)',
+                  border: callState === 'speaking'
+                    ? '1px solid #C4B5FD'
+                    : '1px solid rgba(255, 255, 255, 0.1)',
+                  color: callState === 'speaking' ? '#FFFFFF' : 'var(--text-muted)',
+                  fontSize: '15px',
+                  fontWeight: 700,
+                  boxShadow: callState === 'speaking' ? '0 8px 25px rgba(139, 92, 246, 0.4)' : 'none',
+                  cursor: callState === 'speaking' ? 'pointer' : 'default',
+                  transition: 'all 0.25s ease',
+                  opacity: callState === 'speaking' ? 1 : 0.4,
+                }}
+              >
+                <Hand size={18} />
+                <span>{callState === 'speaking' ? '✋ Tap to Interrupt (Space)' : '🎤 Aria Listening'}</span>
+              </button>
+
+              {/* End Call Button */}
+              <button
+                id="end-call-btn"
+                type="button"
+                onClick={handleEndCall}
+                onKeyDown={(e) => { if (e.code === 'Space') e.preventDefault(); }}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '12px',
+                  padding: '16px 36px', borderRadius: 'var(--radius-full)',
+                  background: 'linear-gradient(135deg,#EF4444 0%,#DC2626 100%)',
+                  color: '#FFF', fontSize: '15px', fontWeight: 700,
+                  boxShadow: '0 8px 30px rgba(239,68,68,0.4)',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  cursor: 'pointer', transition: 'all 0.2s ease',
+                }}
+              >
+                <PhoneOff size={18} />
+                <span>End Call & Generate Summary</span>
+              </button>
+            </>
           )}
 
           {summary && !isCallActive && (
