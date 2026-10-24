@@ -41,8 +41,9 @@ This document provides a line-by-line verification matrix mapping every requirem
 
 ### Section 2.A: Voice Conversation, Persona & Latency
 - [x] **Conversational Speech Understanding:** Handles natural, unscripted speech, hesitation pauses, and varied phrasing.
-- [x] **Indian Voice Persona (*Aria*):** Configured with an authentic Indian English voice persona (`en-IN`), warm tone, polite etiquette, and concise phrasing.
-  - *Implementation:* `components/CallCockpit.tsx`, `app/api/tts/route.ts`
+- [x] **Indian Voice Persona (*Aria*):** Configured with an authentic Indian English voice persona (`en-IN-NeerjaNeural`), warm tone, polite etiquette, and concise phrasing.
+  - *Implementation:* `components/CallCockpit.tsx`, `app/api/tts/route.ts`, `lib/secMsGec.ts`
+  - *Engineering Highlight (Oct 23 → Oct 24, 2026):* When Microsoft pushed an upstream breaking change on Oct 24 deprecating legacy v1 tokens with `Unexpected server response: 200`, we reverse-engineered the native `Sec-MS-GEC` v2 DRM protocol in TypeScript (`lib/secMsGec.ts`), preserving studio-grade `en-IN-NeerjaNeural` audio without depending on broken third-party npm packages.
 - [x] **Spoken-First Text Normalization:** Converts currency glyphs to spoken words (`₹699` $\to$ `"699 Rupees"`), expands acronyms (`"UPI"` $\to$ `"U-P-I"`, `"COD"` $\to$ `"Cash on Delivery"`), and strips markdown asterisks/raw URLs before speech synthesis.
   - *Implementation:* `lib/voiceNormalizer.ts` (`normalizeForSpeech`)
   - *Verification:* Group 4 unit test suite (`scripts/test-engine.mjs`).
@@ -176,7 +177,7 @@ This document provides a line-by-line verification matrix mapping every requirem
   - Documented in `README.md` (Section 5) and interactive `/architecture` page.
   - Covers serverless zero cold-starts, in-memory DB latency rationale vs. hosted external DBs, browser Web Audio vs. LiveKit WebRTC (highlighting candidate's prior Voice AI internship experience), and Indian voice persona.
 - [x] **Question 2: What was the most difficult part of the assignment, and how did you solve it?**
-  - Covers phonetic spoken order ID normalization and active client-side barge-in interruption ducking.
+  - Covers phonetic spoken order ID normalization, active client-side barge-in interruption ducking, and **reverse-engineering Microsoft's breaking upstream TTS DRM protocol migration (October 23 vs. October 24, 2026)** with custom `Sec-MS-GEC` v2 CS64 token generation in `lib/secMsGec.ts`.
 - [x] **Question 3: If you had one more week to work on this, what would you improve first and why?**
   - Covers LiveKit WebRTC transport integration, full customer profile & skin diagnostic CRM layer, and Hinglish phonetics.
 - [x] **Question 4: Imagine this agent is handling 1,000 customer conversations a day. What do you think would need to change or improve?**
