@@ -36,19 +36,21 @@ export default function ArchitecturePage() {
       answer: `The two most difficult engineering challenges were conversational turn-taking and resolving Microsoft's breaking upstream TTS protocol migration:
 1. Phonetic Entity Normalization & Conversational Barge-In:
    - The Problem: Standard Speech-to-Text often transcribes Order IDs phonetically in multiple ways ("ORD 101", "order 101", "ORD one zero one", "o r d 101"), causing database lookup failures. Furthermore, long agent answers felt like an un-interruptible monologue that trapped the user.
-   - The Solution: We engineered a multi-stage regex entity extractor in lib/orderDatabase.ts that handles spoken numerical variations and normalizes them into canonical ORD-XXX format before querying the database. Alongside this, we engineered an active client-side Barge-In listener: the instant customer speech onset or a manual trigger (Spacebar/Tap) is detected during agent playback, the audio context is cancelled immediately, ducking the sound and switching state back to Listening seamlessly.
+   - So here is how I solved it:
+     - I engineered a multi-stage regex entity extractor in lib/orderDatabase.ts that handles spoken numerical variations and normalizes them into canonical ORD-XXX format before querying the database.
+     - Alongside this, I engineered an active client-side Barge-In listener: the instant customer speech onset or a manual trigger (Spacebar/Tap) is detected during agent playback, the audio context is cancelled immediately, ducking the sound and switching state back to Listening seamlessly.
 
 2. Reverse-Engineering Microsoft's Breaking Upstream Protocol Update (October 23 vs. October 24, 2026 — Sec-MS-GEC v2 DRM Migration):
    - The Problem:
      - Yesterday (October 23, 2026): Microsoft's ReadAloud Edge speech synthesis WebSocket endpoint (speech.platform.bing.com) accepted legacy v1 tokens (Sec-MS-GEC via simple SHA-256) or unauthenticated connections without strict token headers. Libraries like msedge-tts v2.1.0 connected and streamed audio without issue.
      - Today (October 24, 2026): Microsoft enforced an abrupt upstream security and DRM protocol update globally across their Azure / Edge Speech WebSocket clusters. Upstream servers deprecated legacy v1 handshakes, immediately rejecting connections with Unexpected server response: 200 (WebSocket protocol downgrade / rejection) and strictly mandating a brand-new Sec-MS-GEC v2 DRM protocol (Sec-MS-GEC-Version: 2-143.0.3650.75). This broke third-party voice packages worldwide overnight.
-   - The Solution: Rather than abandoning the authentic Indian English female voice (en-IN-NeerjaNeural) or settling for generic robotic browser voices, we implemented a native, zero-dependency cryptographic token generator in TypeScript (lib/secMsGec.ts). The algorithm:
-     - Calculates 5-minute windowed Windows NT ticks (epoch 1601) scaled to 100-nanosecond intervals.
-     - Runs a SHA-256 hash schedule with a custom 57-byte prefix and round-14 constant adjustment (0xc9dc06a7).
-     - Computes a 64-bit checksum using polynomial coefficients (CS64).
-     - Formats the composite <16-hex CS64>-<64-hex SHA-256> token paired with Sec-MS-GEC-Version: 2-143.0.3650.75.
-     - Streams 24kHz 48kbps MP3 audio directly through wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1 with in-memory RAM caching for instant 0ms replay.
-   - This restored authentic, studio-grade en-IN-NeerjaNeural speech synthesis with 100% reliability across both local and Vercel serverless cloud runtimes.`
+   - So here is what I did to solve it: Rather than abandoning the authentic Indian English female voice (en-IN-NeerjaNeural) or settling for generic robotic browser voices, I stepped in and built a native, zero-dependency cryptographic token generator in TypeScript (lib/secMsGec.ts). To crack Microsoft's new DRM, I:
+     - Calculated 5-minute windowed Windows NT ticks (epoch 1601) scaled to 100-nanosecond intervals (3,000,000,000 ticks).
+     - Constructed a SHA-256 hash schedule with Microsoft's custom 57-byte prefix and executed the custom round-14 constant adjustment (0xc9dc06a7).
+     - Computed a 64-bit checksum using polynomial coefficients (CS64) over the client token.
+     - Formatted the composite <16-hex CS64>-<64-hex SHA-256> token paired with Sec-MS-GEC-Version: 2-143.0.3650.75.
+     - Streamed 24kHz 48kbps MP3 audio directly through wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1 with in-memory RAM caching for instant 0ms replay.
+   - By engineering this protocol layer myself, I restored authentic, studio-grade en-IN-NeerjaNeural speech synthesis with 100% reliability across both local and Vercel serverless cloud runtimes in just a few hours.`
     },
     {
       question: '3. If you had one more week to work on this, what would you improve first and why?',
@@ -362,7 +364,7 @@ export default function ArchitecturePage() {
         </div>
 
         <p style={{ color: 'var(--text-secondary)', fontSize: '14px', lineHeight: 1.6, marginBottom: '22px' }}>
-          During final evaluation preparation, Microsoft pushed an unannounced upstream breaking security migration to their Edge Speech synthesis WebSocket service (<code style={{ color: '#A7F3D0', fontSize: '12px' }}>speech.platform.bing.com</code>). Here is how we diagnosed the breaking change, reverse-engineered the native cryptographic v2 protocol in pure TypeScript, and restored 100% voice uptime in production:
+          During final evaluation preparation, Microsoft pushed an unannounced upstream breaking security migration to their Edge Speech synthesis WebSocket service (<code style={{ color: '#A7F3D0', fontSize: '12px' }}>speech.platform.bing.com</code>). Here is how I diagnosed the breaking change, reverse-engineered Microsoft&apos;s native cryptographic v2 protocol in pure TypeScript, and restored 100% voice uptime in production:
         </p>
 
         {/* Side-by-Side Comparison: Oct 23 vs Oct 24 */}
@@ -437,7 +439,7 @@ export default function ArchitecturePage() {
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', color: 'var(--emerald-accent)', fontWeight: 700, fontSize: '14px' }}>
             <Server size={16} />
-            <span>Our Solution: Native Zero-Dependency Protocol Implementation (<code style={{ color: '#A7F3D0' }}>lib/secMsGec.ts</code>)</span>
+            <span>How I Solved It: Native Zero-Dependency Protocol Implementation (<code style={{ color: '#A7F3D0' }}>lib/secMsGec.ts</code>)</span>
           </div>
           <div style={{
             display: 'grid',
