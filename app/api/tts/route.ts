@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts';
+import { EdgeTTS } from '@andresaya/edge-tts';
 import { normalizeTextForVoice } from '@/lib/voiceNormalizer';
 
-// Must be Node.js runtime — msedge-tts uses Node.js WebSockets + EventEmitter
+// Must be Node.js runtime
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 // In-process RAM cache: phrase → Buffer (max 100 entries, ~5MB)
 const cache = new Map<string, Buffer>();
+
+// Shared client with updated Sec-MS-GEC v2 protocol
+const edgeTtsClient = new EdgeTTS();
 
 // Pre-warm frequently used Aria phrases at server startup
 const PREWARM = [
@@ -24,34 +27,11 @@ async function synthesize(text: string): Promise<Buffer> {
     .replace(/[<>&]/g, ' ')
     .trim();
 
-  const tts = new MsEdgeTTS();
-  await tts.setMetadata('en-IN-NeerjaNeural', OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
-  const { audioStream } = tts.toStream(cleanText);
-
-  return new Promise<Buffer>((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      try { tts.close(); } catch (_) {}
-      reject(new Error('TTS_SOCKET_TIMEOUT'));
-    }, 3500);
-
-    const chunks: Buffer[] = [];
-    audioStream.on('data', (chunk: any) => {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-    });
-    audioStream.on('end', () => {
-      clearTimeout(timeout);
-      try { tts.close(); } catch (_) {}
-      resolve(Buffer.concat(chunks));
-    });
-    audioStream.on('error', (err: any) => {
-      clearTimeout(timeout);
-      try { tts.close(); } catch (_) {}
-      reject(err);
-    });
-  });
+  const result = await edgeTtsClient.generate(cleanText, 'en-IN-NeerjaNeural');
+  return result.audio;
 }
 
-// Kick off pre-warming in background (server startup side-effect)
+// Kick off pre-warming in background
 (async () => {
   for (const phrase of PREWARM) {
     const key = normalizeTextForVoice(phrase).toLowerCase();
@@ -92,7 +72,7 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // ── Cache MISS → synthesize (~700ms) ────────────────────────────────
+    // ── Cache MISS → synthesize en-IN-NeerjaNeural ──────────────────────
     const buf = await synthesize(text);
 
     // Evict oldest entry if over limit
