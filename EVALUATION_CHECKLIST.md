@@ -1,7 +1,7 @@
 # Technical Evaluation & Compliance Matrix
 ## DataStraw AI + Tech Assessment: Autonomous Voice CX Agent (Aria)
 
-This document provides a line-by-line verification matrix mapping every requirement, edge case, and architectural criteria from the official assessment specification (`AI+Tech intern-assesment.md`) to its concrete implementation files, test cases, and runtime evidence.
+This document provides a line-by-line verification matrix mapping every requirement, edge case, and architectural criteria from the official assessment specification to its concrete implementation files, test cases, and runtime evidence.
 
 ---
 
