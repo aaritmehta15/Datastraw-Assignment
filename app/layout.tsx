@@ -25,8 +25,8 @@ export default function RootLayout({
           {children}
         </main>
         <footer style={{
-          borderTop: '1px solid rgba(212, 175, 55, 0.12)',
-          backgroundColor: 'rgba(7, 25, 18, 0.95)',
+          borderTop: '1px solid var(--border-subtle)',
+          backgroundColor: 'var(--bg-card)',
           padding: '24px 0',
           fontSize: '13px',
           color: 'var(--text-muted)',
@@ -40,14 +40,14 @@ export default function RootLayout({
             gap: '12px'
           }}>
             <div>
-              <span style={{ color: 'var(--text-secondary)' }}>Aura Skincare CX Platform</span> • Pure Organic Botanical Care • Aria Voice Concierge
+              <span style={{ color: 'var(--text-secondary)' }}>Aura Skincare</span> — Pure Organic Botanical Care • Aria Voice Concierge
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <span>Persona: <strong style={{ color: 'var(--gold-primary)' }}>Aria (en-IN)</strong></span>
+              <span>Voice: <strong style={{ color: 'var(--gold-primary)' }}>Aria (en-IN)</strong></span>
               <span>•</span>
-              <span>Deterministic Policy Engine</span>
+              <span>Brand Policy Engine</span>
               <span>•</span>
-              <span>Sub-Second Latency</span>
+              <span>Live Order Verification</span>
             </div>
           </div>
         </footer>

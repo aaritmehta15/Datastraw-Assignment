@@ -90,4 +90,44 @@ assert(voiceText.includes('Order O-R-D 101'), 'ORD-101 converted to "Order O-R-D
 assert(voiceText.includes('Cash on Delivery'), 'COD expanded to Cash on Delivery');
 assert(voiceText.includes('U-P-I'), 'UPI expanded to U-P-I');
 
+// Regression test for word boundary bug
+const listText = "I can only help with Aura Skincare products, orders, returns or policies.";
+const normList = normalizeTextForVoice(listText);
+assert(!normList.includes('orde,'), 'Word "orders," preserved without corruption');
+assert(normList.includes('orders,'), 'Word "orders," correctly present');
+
+// 5. CUSTOMER NAME LOOKUP TESTS
+console.log('\n👤 Group 5: Customer Name Lookup');
+import { findOrderByCustomerName } from '../lib/orderDatabase.ts';
+const priyaOrder = findOrderByCustomerName('Priya Sharma');
+assert(priyaOrder !== null && priyaOrder.orderId === 'ORD-101', 'Lookup by "Priya Sharma" finds ORD-101');
+
+const rahulOrder = findOrderByCustomerName('Rahul');
+assert(rahulOrder !== null && rahulOrder.orderId === 'ORD-102', 'Lookup by first name "Rahul" finds ORD-102');
+
+const ananyaOrder = getOrderDetails('Ananya Patel');
+assert(ananyaOrder.found === true && ananyaOrder.orderId === 'ORD-103', 'getOrderDetails directly supports customer name "Ananya Patel"');
+
+// 6. BOTANICAL PRODUCT & INGREDIENT CATALOG TESTS
+console.log('\n🌿 Group 6: Product & Ingredient Knowledge Base');
+import { AURA_PRODUCT_CATALOG } from '../lib/brandKnowledge.ts';
+assert(AURA_PRODUCT_CATALOG.length === 6, 'Product catalog contains exactly 6 botanical products');
+const vitC = AURA_PRODUCT_CATALOG.find(p => p.id === 'prod-vit-c');
+assert(vitC && vitC.ingredients.includes('15% Ethyl Ascorbic Acid'), 'Vitamin C Serum contains 15% Ethyl Ascorbic Acid');
+assert(vitC.usageTip.includes('sunscreen'), 'Vitamin C usage recommends sunscreen');
+
+const kumkumadi = AURA_PRODUCT_CATALOG.find(p => p.id === 'prod-kumkumadi');
+assert(kumkumadi && kumkumadi.ingredients.includes('Kashmiri Saffron'), 'Kumkumadi Oil contains Kashmiri Saffron');
+
+// 7. CUSTOMER ACCOUNT & GREETINGS
+console.log('\n🎙️ Group 7: Customer Account & Personalized Greetings');
+import { getCustomerPersonalizedGreeting, SEED_CUSTOMERS } from '../lib/customerAccounts.ts';
+const priyaGreeting = getCustomerPersonalizedGreeting(SEED_CUSTOMERS[0]);
+assert(priyaGreeting.includes('Namaste Priya'), 'Greeting addresses Priya by first name');
+assert(priyaGreeting.includes('out for delivery'), 'Greeting recognizes ORD-101 is out for delivery');
+
+const guestGreeting = getCustomerPersonalizedGreeting(SEED_CUSTOMERS[3]);
+assert(guestGreeting.includes('I am Aria from Aura Skincare'), 'Guest greeting provides friendly brand welcome');
+
 console.log(`\n🎉 SUMMARY: ${passedTests}/${totalTests} TESTS PASSED WITH 100% SUCCESS!\n`);
+

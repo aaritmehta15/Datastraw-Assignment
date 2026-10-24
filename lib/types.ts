@@ -40,6 +40,25 @@ export interface CallTranscriptTurn {
   }[];
 }
 
+export interface ProductItem {
+  id: string;
+  name: string;
+  price: number;
+  category: string;
+  size: string;
+  ingredients: string;
+  keyBenefits: string[];
+  usageTip: string;
+}
+
+export interface CustomerProfile {
+  id: string;
+  name: string;
+  email: string;
+  tier: 'Gold Member' | 'Silver Member' | 'First-Time Customer';
+  activeOrderId?: string;
+}
+
 export interface StructuredCallSummary {
   customer_intent: 'ORDER_TRACKING' | 'CANCELLATION' | 'RETURN_REFUND' | 'POLICY_INQUIRY' | 'OUT_OF_SCOPE' | 'GENERAL_QUERY';
   order_id: string | null;

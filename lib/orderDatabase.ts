@@ -99,23 +99,53 @@ export function normalizeOrderId(rawInput: string | null | undefined): string | 
 }
 
 /**
- * Deterministic Order Query Tool
+ * Helper to find an order by customer name (e.g., "Priya Sharma", "Rahul", "Ananya")
+ */
+export function findOrderByCustomerName(nameQuery: string): Order | null {
+  if (!nameQuery) return null;
+  const store = getStore();
+  const search = nameQuery.trim().toLowerCase();
+
+  // Try exact match or first/last name match
+  for (const order of Object.values(store)) {
+    const cust = order.customerName.toLowerCase();
+    const firstName = cust.split(' ')[0];
+    if (cust === search || cust.includes(search) || search.includes(firstName)) {
+      return order;
+    }
+  }
+  return null;
+}
+
+/**
+ * Deterministic Order Query Tool - handles Order ID (ORD-101) and Customer Names (Priya Sharma)
  */
 export function getOrderDetails(orderIdRaw: string) {
   const store = getStore();
   const canonicalId = normalizeOrderId(orderIdRaw);
 
-  if (!canonicalId || !store[canonicalId]) {
+  let order: Order | undefined;
+
+  if (canonicalId && store[canonicalId]) {
+    order = store[canonicalId];
+  } else {
+    // Check if user passed a customer name instead of an Order ID
+    const byName = findOrderByCustomerName(orderIdRaw);
+    if (byName) {
+      order = byName;
+    }
+  }
+
+  if (!order) {
     return {
       found: false,
       error: 'ORDER_NOT_FOUND',
       searchedId: orderIdRaw,
       canonicalId: canonicalId,
-      message: `I could not locate an order matching "${orderIdRaw}". Could you please verify the order ID? It should look like ORD-101.`
+      message: `I could not locate an order matching "${orderIdRaw}". Could you please verify the order ID (like ORD-101) or customer name?`
     };
   }
 
-  const order = store[canonicalId];
   return {
     found: true,
     orderId: order.orderId,

@@ -7,6 +7,12 @@ import TranscriptStream from './TranscriptStream';
 import EvaluatorQuickTest from './EvaluatorQuickTest';
 import PostCallModal from './PostCallModal';
 import { CallTranscriptTurn, StructuredCallSummary } from '@/lib/types';
+import {
+  ExtendedCustomerAccount,
+  getActiveCustomer,
+  getCustomerPersonalizedGreeting
+} from '@/lib/customerAccounts';
+import { addTelemetryRecord } from '@/lib/telemetryStore';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  VOIP-GRADE WEB AUDIO & SPEECH ARCHITECTURE:
@@ -44,8 +50,11 @@ export default function CallCockpit() {
   const [summary, setSummary] = useState<StructuredCallSummary | null>(null);
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
   const [hasMicPermission, setHasMicPermission] = useState<boolean | null>(null);
+  const [activeCustomer, setActiveCustomer] = useState<ExtendedCustomerAccount>(getActiveCustomer());
 
   // ── Refs (synchronous, immune to stale closure issues) ─────────────────────
+  const activeCustomerRef = useRef<ExtendedCustomerAccount>(activeCustomer);
+  activeCustomerRef.current = activeCustomer;
   const isCallActiveRef = useRef(false);
   const callStateRef = useRef<CallState>('idle');
   const shouldBeListeningRef = useRef(false);
@@ -63,13 +72,26 @@ export default function CallCockpit() {
     setCallState(s);
   }, []);
 
-  // ── Pre-warm Greeting Audio on Mount (instant first-click playback) ───────
+  // ── Sync with global customer changes ─────────────────────────────────────
   useEffect(() => {
-    fetch(`/api/tts?text=${encodeURIComponent(GREETING_TEXT)}`)
+    const handleCustomerChange = (e: any) => {
+      if (e.detail) {
+        setActiveCustomer(e.detail);
+        activeCustomerRef.current = e.detail;
+      }
+    };
+    window.addEventListener('aura:customer-changed', handleCustomerChange);
+    return () => window.removeEventListener('aura:customer-changed', handleCustomerChange);
+  }, []);
+
+  // ── Pre-warm Greeting Audio for Active Customer ───────────────────────────
+  useEffect(() => {
+    const greeting = getCustomerPersonalizedGreeting(activeCustomer);
+    fetch(`/api/tts?text=${encodeURIComponent(greeting)}`)
       .then(res => res.ok ? res.arrayBuffer() : null)
       .then(buf => { if (buf) greetingBufferRef.current = buf; })
       .catch(() => {});
-  }, []);
+  }, [activeCustomer]);
 
   // ── Call Duration Timer ───────────────────────────────────────────────────
   useEffect(() => {
@@ -339,7 +361,11 @@ export default function CallCockpit() {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages, userMessage: text }),
+        body: JSON.stringify({
+          messages,
+          userMessage: text,
+          customerProfile: activeCustomerRef.current
+        }),
       });
 
       const data = await res.json();
@@ -393,7 +419,7 @@ export default function CallCockpit() {
     setInterimText('');
     setSummary(null);
 
-    const greeting = GREETING_TEXT;
+    const greeting = getCustomerPersonalizedGreeting(activeCustomerRef.current);
     const turn: CallTranscriptTurn = {
       id: `turn-${Date.now()}-init`,
       speaker: 'aria',
@@ -443,6 +469,15 @@ export default function CallCockpit() {
         if (data.summary) {
           setSummary(data.summary);
           setIsSummaryOpen(true);
+
+          // Save completed conversation directly into live CRM Telemetry Store
+          addTelemetryRecord({
+            durationSeconds: duration || Math.max(14, snap.length * 4),
+            customerName: activeCustomerRef.current?.name,
+            customerTier: activeCustomerRef.current?.tier,
+            transcript: snap,
+            summary: data.summary,
+          });
         }
       } catch (err) {
         console.error('[Summary] error:', err);
@@ -459,125 +494,211 @@ export default function CallCockpit() {
   // ═══════════════════════════════════════════════════════════════════════════
   return (
     <div>
-      <div className="glass-card" style={{ maxWidth: '860px', margin: '0 auto', textAlign: 'center', padding: '36px 28px' }}>
+      {/* ── Main Voice Interaction Center ───────────────────────────────────── */}
+      <div className="enterprise-card" style={{ maxWidth: '860px', margin: '0 auto', padding: '28px 24px' }}>
 
-        {/* State badge + controls header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
-
-          {/* Live state pill */}
-          <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: '8px',
-            padding: '8px 18px', borderRadius: 'var(--radius-full)',
-            background: callState === 'listening' ? 'rgba(16,185,129,0.15)'
-              : callState === 'thinking' ? 'rgba(245,158,11,0.15)'
-              : callState === 'speaking' ? 'rgba(139,92,246,0.15)'
-              : 'rgba(255,255,255,0.05)',
-            border: `1px solid ${callState === 'listening' ? 'var(--status-listening)'
-              : callState === 'thinking' ? 'var(--status-thinking)'
-              : callState === 'speaking' ? 'var(--status-speaking)'
-              : 'rgba(255,255,255,0.1)'}`,
-            color: '#FFF', fontSize: '13px', fontWeight: 700, letterSpacing: '0.04em',
-          }}>
-            <span
-              className={isCallActive ? 'animate-pulse-dot' : ''}
-              style={{
-                width: '10px', height: '10px', borderRadius: '50%',
-                backgroundColor: callState === 'listening' ? 'var(--status-listening)'
-                  : callState === 'thinking' ? 'var(--status-thinking)'
-                  : callState === 'speaking' ? 'var(--status-speaking)'
-                  : 'var(--text-muted)',
-              }}
-            />
-            <span style={{ textTransform: 'uppercase' }}>
-              {callState === 'idle' && 'READY TO CONNECT'}
-              {callState === 'listening' && 'LISTENING — SPEAK FREELY'}
-              {callState === 'thinking' && 'THINKING & VERIFYING DB'}
-              {callState === 'speaking' && 'ARIA SPEAKING'}
-            </span>
+        {/* Console Header: Agent Profile + Status Pill */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: '20px',
+          paddingBottom: '16px',
+          borderBottom: '1px solid var(--border-subtle)',
+          flexWrap: 'wrap',
+          gap: '12px'
+        }}>
+          {/* Agent Identity */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{
+              width: '42px',
+              height: '42px',
+              borderRadius: 'var(--radius-sm)',
+              background: 'var(--bg-surface-elevated)',
+              border: '1px solid var(--border-default)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--brand-light)'
+            }}>
+              <Sparkles size={20} />
+            </div>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '15px', fontWeight: 700, color: '#FFFFFF' }}>Aria</span>
+                <span style={{
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  padding: '2px 8px',
+                  borderRadius: 'var(--radius-sm)',
+                  background: 'var(--brand-subtle)',
+                  color: 'var(--brand-light)',
+                  border: '1px solid var(--brand-border)'
+                }}>
+                  en-IN Voice Persona
+                </span>
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                AI Customer Experience Specialist • Aura Skincare
+              </div>
+            </div>
           </div>
 
-          {/* Timer + voice badge */}
+          {/* Status Badge & Call Timer */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-            <span style={{
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '6px 14px',
+              borderRadius: 'var(--radius-sm)',
+              background: callState === 'listening' ? 'rgba(37, 99, 235, 0.16)'
+                : callState === 'thinking' ? 'rgba(245, 158, 11, 0.14)'
+                : callState === 'speaking' ? 'rgba(56, 189, 248, 0.14)'
+                : 'var(--bg-surface-elevated)',
+              border: `1px solid ${callState === 'listening' ? '#3B82F6'
+                : callState === 'thinking' ? 'rgba(245, 158, 11, 0.4)'
+                : callState === 'speaking' ? '#38BDF8'
+                : 'var(--border-default)'}`,
+              color: '#FFFFFF',
+              fontSize: '12px',
+              fontWeight: 600,
+            }}>
+              <span
+                className={isCallActive ? 'animate-pulse-dot' : ''}
+                style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  backgroundColor: callState === 'listening' ? '#3B82F6'
+                    : callState === 'thinking' ? '#F59E0B'
+                    : callState === 'speaking' ? '#38BDF8'
+                    : 'var(--text-muted)',
+                }}
+              />
+              <span style={{ textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                {callState === 'idle' && 'Ready to Connect'}
+                {callState === 'listening' && 'Listening to Customer'}
+                {callState === 'thinking' && 'Verifying Order with Carrier'}
+                {callState === 'speaking' && 'Aria Speaking'}
+              </span>
+            </div>
+
+            <div style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: '6px',
+              padding: '6px 12px',
+              borderRadius: 'var(--radius-sm)',
+              background: 'var(--bg-inset)',
+              border: '1px solid var(--border-subtle)',
               fontFamily: 'var(--font-mono)',
-              fontSize: '13px',
+              fontSize: '12px',
               fontWeight: 600,
-              color: isCallActive ? 'var(--gold-primary)' : 'var(--text-secondary)'
+              color: isCallActive ? 'var(--brand-light)' : 'var(--text-muted)'
             }}>
-              <Clock size={13} color="var(--gold-primary)" />
+              <Clock size={12} />
               <span>{fmt(duration)}</span>
-            </span>
-
-            <div style={{
-              display: 'inline-flex', alignItems: 'center', gap: '6px',
-              padding: '6px 14px', borderRadius: 'var(--radius-full)',
-              background: 'rgba(212,175,55,0.12)', border: '1px solid var(--gold-primary)',
-              fontSize: '12px', color: 'var(--gold-light)', fontWeight: 600,
-            }}>
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--gold-primary)' }} />
-              <span>Aria • NeerjaNeural (en-IN)</span>
             </div>
           </div>
         </div>
 
-        {/* Waveform */}
+        {/* Audio Visualizer */}
         <AudioVisualizer state={callState} />
 
-        {/* Stable Call Action Buttons (Zero Layout Shift) */}
-        <div style={{ marginTop: '32px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+        {/* Spacebar Interrupt Banner Inside Console */}
+        {isCallActive && (
+          <div style={{
+            marginTop: '16px',
+            padding: '10px 16px',
+            borderRadius: 'var(--radius-sm)',
+            background: 'rgba(37, 99, 235, 0.12)',
+            border: '1px solid rgba(59, 130, 246, 0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '10px',
+            color: '#93C5FD',
+            fontSize: '12px'
+          }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+              <kbd style={{
+                padding: '2px 8px',
+                borderRadius: '4px',
+                background: '#1E293B',
+                border: '1px solid #3B82F6',
+                color: '#FFFFFF',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '11px',
+                fontWeight: 700
+              }}>SPACEBAR</kbd>
+              <span><strong>Press Spacebar</strong> or speak anytime to interrupt Aria</span>
+            </span>
+          </div>
+        )}
+
+        {/* Primary Controls */}
+        <div style={{
+          marginTop: '20px',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          gap: '14px',
+          flexWrap: 'wrap'
+        }}>
           {!isCallActive ? (
             <button
               id="start-call-btn"
               type="button"
               onClick={handleStartCall}
               style={{
-                display: 'inline-flex', alignItems: 'center', gap: '12px',
-                padding: '16px 40px', borderRadius: 'var(--radius-full)',
-                background: 'linear-gradient(135deg,#10B981 0%,#059669 100%)',
-                color: '#FFF', fontSize: '16px', fontWeight: 700,
-                boxShadow: '0 8px 30px rgba(16,185,129,0.4)',
-                border: '1px solid rgba(255,255,255,0.2)',
-                cursor: 'pointer', transition: 'all 0.2s ease',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '14px 36px',
+                borderRadius: 'var(--radius-sm)',
+                background: '#2563EB',
+                color: '#FFFFFF',
+                fontSize: '15px',
+                fontWeight: 700,
+                border: 'none',
+                cursor: 'pointer',
+                transition: 'background-color 0.15s ease',
+                boxShadow: 'var(--shadow-md)'
               }}
             >
-              <Phone size={20} />
-              <span>Start Voice Call with Aria</span>
+              <Phone size={18} />
+              <span>Start Voice Conversation</span>
             </button>
           ) : (
             <>
-              {/* Permanent, Side-by-Side Interrupt Button */}
+              {/* Permanent Interrupt Button */}
               <button
                 id="interrupt-btn"
                 type="button"
                 onClick={handleInterrupt}
                 disabled={callState !== 'speaking'}
-                title={callState === 'speaking' ? 'Interrupt Aria and speak' : 'Aria is currently listening'}
+                title={callState === 'speaking' ? 'Interrupt Aria and speak (Spacebar)' : 'Aria is listening'}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: '10px',
-                  padding: '16px 28px',
-                  borderRadius: 'var(--radius-full)',
+                  gap: '8px',
+                  padding: '12px 24px',
+                  borderRadius: 'var(--radius-sm)',
                   background: callState === 'speaking'
-                    ? 'linear-gradient(135deg, #8B5CF6 0%, #6D28D9 100%)'
-                    : 'rgba(255, 255, 255, 0.05)',
-                  border: callState === 'speaking'
-                    ? '1px solid #C4B5FD'
-                    : '1px solid rgba(255, 255, 255, 0.1)',
+                    ? '#1E293B'
+                    : 'var(--bg-inset)',
+                  border: `1px solid ${callState === 'speaking' ? '#38BDF8' : 'var(--border-subtle)'}`,
                   color: callState === 'speaking' ? '#FFFFFF' : 'var(--text-muted)',
-                  fontSize: '15px',
-                  fontWeight: 700,
-                  boxShadow: callState === 'speaking' ? '0 8px 25px rgba(139, 92, 246, 0.4)' : 'none',
+                  fontSize: '14px',
+                  fontWeight: 600,
                   cursor: callState === 'speaking' ? 'pointer' : 'default',
-                  transition: 'all 0.25s ease',
-                  opacity: callState === 'speaking' ? 1 : 0.4,
+                  transition: 'all 0.15s ease',
+                  opacity: callState === 'speaking' ? 1 : 0.6,
                 }}
               >
-                {callState === 'speaking' ? <Hand size={18} /> : <Mic size={18} />}
-                <span>{callState === 'speaking' ? 'Tap to Interrupt (Space)' : 'Aria Listening'}</span>
+                {callState === 'speaking' ? <Hand size={16} color="#38BDF8" /> : <Mic size={16} />}
+                <span>{callState === 'speaking' ? 'Interrupt Aria (Spacebar)' : 'Aria Listening'}</span>
               </button>
 
               {/* End Call Button */}
@@ -587,17 +708,23 @@ export default function CallCockpit() {
                 onClick={handleEndCall}
                 onKeyDown={(e) => { if (e.code === 'Space') e.preventDefault(); }}
                 style={{
-                  display: 'inline-flex', alignItems: 'center', gap: '12px',
-                  padding: '16px 36px', borderRadius: 'var(--radius-full)',
-                  background: 'linear-gradient(135deg,#EF4444 0%,#DC2626 100%)',
-                  color: '#FFF', fontSize: '15px', fontWeight: 700,
-                  boxShadow: '0 8px 30px rgba(239,68,68,0.4)',
-                  border: '1px solid rgba(255,255,255,0.2)',
-                  cursor: 'pointer', transition: 'all 0.2s ease',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '12px 28px',
+                  borderRadius: 'var(--radius-sm)',
+                  background: '#DC2626',
+                  color: '#FFFFFF',
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  border: 'none',
+                  cursor: 'pointer',
+                  transition: 'opacity 0.15s ease',
+                  boxShadow: '0 2px 8px rgba(220, 38, 38, 0.4)'
                 }}
               >
-                <PhoneOff size={18} />
-                <span>End Call & Generate Summary</span>
+                <PhoneOff size={16} />
+                <span>Stop / End Call</span>
               </button>
             </>
           )}
@@ -606,47 +733,63 @@ export default function CallCockpit() {
             <button
               onClick={() => setIsSummaryOpen(true)}
               style={{
-                display: 'inline-flex', alignItems: 'center', gap: '8px',
-                padding: '16px 24px', borderRadius: 'var(--radius-full)',
-                background: 'rgba(212,175,55,0.15)', border: '1px solid var(--gold-primary)',
-                color: 'var(--gold-light)', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '12px 22px',
+                borderRadius: 'var(--radius-sm)',
+                background: 'var(--bg-surface-elevated)',
+                border: '1px solid #3B82F6',
+                color: '#93C5FD',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: 'pointer',
               }}
             >
-              <Sparkles size={16} />
-              <span>View Call JSON Summary</span>
+              <Sparkles size={15} color="#38BDF8" />
+              <span>View Call Summary (JSON)</span>
             </button>
           )}
         </div>
 
-        {/* Mic warning */}
+        {/* Microphone Warning */}
         {hasMicPermission === false && (
-          <div style={{ marginTop: '16px', display: 'inline-flex', alignItems: 'center', gap: '8px', color: '#F87171', fontSize: '12px' }}>
+          <div style={{
+            marginTop: '16px',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            color: '#F87171',
+            fontSize: '12px'
+          }}>
             <AlertCircle size={14} />
-            <span>Microphone access denied. Please allow microphone permissions in your browser or use the quick-test chips below.</span>
+            <span>Microphone access denied. Please enable microphone permissions in your browser or select an inquiry below.</span>
           </div>
         )}
       </div>
 
-      {/* Quick-test chips */}
-      <EvaluatorQuickTest
-        onSelectScenario={(prompt) => {
-          if (!isCallActive) {
-            handleStartCall();
-            setTimeout(() => processUserUtterance(prompt), 1500);
-          } else {
-            processUserUtterance(prompt);
-          }
-        }}
-      />
-
-      {/* Transcript */}
+      {/* ── Transcript Stream (Placed directly under console so it is visible together) ── */}
       <TranscriptStream
         transcript={transcript}
         interimUserText={interimText}
         isThinking={callState === 'thinking'}
       />
 
-      {/* Summary modal */}
+      {/* ── Sample Orders & Suggested Inquiries Helper ──────────────────────── */}
+      <div style={{ marginTop: '24px' }}>
+        <EvaluatorQuickTest
+          onSelectScenario={(prompt) => {
+            if (!isCallActive) {
+              handleStartCall();
+              setTimeout(() => processUserUtterance(prompt), 1500);
+            } else {
+              processUserUtterance(prompt);
+            }
+          }}
+        />
+      </div>
+
+      {/* Post-Call Summary Modal */}
       <PostCallModal
         isOpen={isSummaryOpen}
         onClose={() => setIsSummaryOpen(false)}

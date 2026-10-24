@@ -1,52 +1,70 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 :root {
-  /* Brand Palette - Aura Skincare Luxury Botanical */
-  --bg-primary: #071912;
-  --bg-secondary: #0D261E;
-  --bg-card: rgba(16, 42, 33, 0.7);
-  --bg-card-hover: rgba(22, 54, 43, 0.85);
-  --bg-glass: rgba(255, 255, 255, 0.04);
-  --bg-glass-border: rgba(212, 175, 55, 0.18);
-  --bg-glass-border-subtle: rgba(255, 255, 255, 0.08);
+  /* Classic Enterprise Legacy Software Palette (Navy, Slate, Cobalt & Steel) */
+  --bg-primary: #0B1120;
+  --bg-surface: #111A2E;
+  --bg-surface-elevated: #18243C;
+  --bg-surface-hover: #1E2D4A;
+  --bg-inset: #070B14;
 
-  /* Accents */
-  --gold-primary: #D4AF37;
-  --gold-light: #F3E5AB;
-  --gold-dark: #997D24;
-  --gold-glow: rgba(212, 175, 55, 0.25);
+  /* Borders & Dividers */
+  --border-subtle: #1E2E4A;
+  --border-default: #2A3F63;
+  --border-hover: #3D5A8C;
+  --border-brand: #3B82F6;
+  --border-gold: #38BDF8;
 
-  --emerald-accent: #10B981;
-  --emerald-glow: rgba(16, 185, 129, 0.25);
+  /* Enterprise Cobalt Accents */
+  --brand-primary: #2563EB;
+  --brand-light: #60A5FA;
+  --brand-dark: #1D4ED8;
+  --brand-subtle: rgba(37, 99, 235, 0.14);
+  --brand-border: rgba(59, 130, 246, 0.35);
 
-  /* Status Colors */
-  --status-listening: #10B981;
+  --accent-cyan: #0284C7;
+  --accent-cyan-light: #38BDF8;
+
+  /* Functional Component Mapping */
+  --gold-primary: #38BDF8;
+  --gold-light: #93C5FD;
+  --gold-dark: #1D4ED8;
+  --gold-subtle: rgba(56, 189, 248, 0.12);
+
+  --emerald-accent: #2563EB;
+  --emerald-subtle: rgba(37, 99, 235, 0.14);
+  --emerald-border: rgba(59, 130, 246, 0.35);
+  --emerald-light: #60A5FA;
+
+  /* Functional Status */
+  --status-listening: #2563EB;
   --status-thinking: #F59E0B;
-  --status-speaking: #8B5CF6;
-  --status-error: #EF4444;
+  --status-speaking: #0284C7;
+  --status-error: #DC2626;
+  --status-success: #16A34A;
 
   /* Typography */
-  --text-primary: #F8FAF9;
-  --text-secondary: #A3B8B0;
-  --text-muted: #6B8278;
-  --text-gold: #E5C365;
+  --text-primary: #F8FAFC;
+  --text-secondary: #94A3B8;
+  --text-muted: #64748B;
+  --text-brand: #60A5FA;
+  --text-gold: #38BDF8;
 
   /* Fonts */
-  --font-display: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 
-  /* Elevation & Shadows */
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.55);
-  --shadow-gold: 0 0 25px rgba(212, 175, 55, 0.15);
-  --shadow-glow: 0 0 35px rgba(16, 185, 129, 0.15);
+  /* Elevation */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 10px 24px rgba(0, 0, 0, 0.55);
 
-  /* Radii */
-  --radius-sm: 8px;
-  --radius-md: 14px;
-  --radius-lg: 20px;
+  /* Radii - classic structured software geometry */
+  --radius-xs: 3px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
   --radius-full: 9999px;
 }
 
@@ -62,25 +80,11 @@ html, body {
   background-color: var(--bg-primary);
   color: var(--text-primary);
   font-family: var(--font-sans);
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1.6;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-}
-
-/* Background Atmospheric Gradient Glow */
-body::before {
-  content: '';
-  position: fixed;
-  top: -20%;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 900px;
-  height: 600px;
-  background: radial-gradient(circle, rgba(16, 75, 56, 0.35) 0%, rgba(212, 175, 55, 0.08) 50%, transparent 75%);
-  pointer-events: none;
-  z-index: 0;
 }
 
 a {
@@ -95,55 +99,61 @@ button {
   background: none;
 }
 
-/* Global Container */
+/* Container */
 .container {
   max-width: 1240px;
   margin: 0 auto;
   padding: 0 24px;
   position: relative;
-  z-index: 1;
 }
 
-/* Modern Card Primitive */
-.glass-card {
-  background: var(--bg-card);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--bg-glass-border-subtle);
+/* Enterprise Surface Card */
+.glass-card,
+.enterprise-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   padding: 24px;
   box-shadow: var(--shadow-md);
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: border-color 0.2s ease, background-color 0.2s ease;
 }
 
-.glass-card:hover {
-  border-color: var(--bg-glass-border);
-  box-shadow: var(--shadow-lg), var(--shadow-gold);
+.glass-card:hover,
+.enterprise-card:hover {
+  border-color: var(--border-hover);
 }
 
-/* Pulse Animation for Live Badges */
+/* Sub-card primitive */
+.sub-card {
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 16px;
+}
+
+/* Subtle Pulse for Live State */
 @keyframes pulse-dot {
-  0% { transform: scale(0.95); opacity: 0.8; }
-  50% { transform: scale(1.15); opacity: 1; filter: drop-shadow(0 0 6px currentColor); }
-  100% { transform: scale(0.95); opacity: 0.8; }
+  0% { transform: scale(0.92); opacity: 0.75; }
+  50% { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(0.92); opacity: 0.75; }
 }
 
 .animate-pulse-dot {
   animation: pulse-dot 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-/* Custom Scrollbars */
+/* Clean Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--bg-primary);
+  background: var(--bg-inset);
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(212, 175, 55, 0.25);
+  background: rgba(255, 255, 255, 0.16);
   border-radius: var(--radius-full);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(212, 175, 55, 0.45);
+  background: rgba(255, 255, 255, 0.3);
 }

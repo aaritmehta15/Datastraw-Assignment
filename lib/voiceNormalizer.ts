@@ -24,13 +24,13 @@ export function normalizeTextForVoice(input: string): string {
   // 4. Remove markdown links [text](url) -> text
   text = text.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
 
-  // 5. Currency conversion: ₹XXX or Rs. XXX -> XXX Rupees
-  text = text.replace(/₹\s*([\d,]+)/g, '$1 Rupees');
-  text = text.replace(/Rs\.?\s*([\d,]+)/gi, '$1 Rupees');
-  text = text.replace(/INR\s*([\d,]+)/gi, '$1 Rupees');
+  // 5. Currency conversion: ₹XXX or Rs. XXX -> XXX Rupees (requires word boundary and leading digit)
+  text = text.replace(/₹\s*(\d[\d,]*)/g, '$1 Rupees');
+  text = text.replace(/\bRs\.?\s*(\d[\d,]*)/gi, '$1 Rupees');
+  text = text.replace(/\bINR\s*(\d[\d,]*)/gi, '$1 Rupees');
 
-  // 6. Order ID phonetic spacing: ORD-101 -> Order O-R-D 101
-  text = text.replace(/\bORD-(\d{3})\b/gi, 'Order O-R-D $1');
+  // 6. Order ID phonetic spacing: ORD-101 -> Order O-R-D 101 (supports 3-5 digits)
+  text = text.replace(/\bORD-(\d{3,5})\b/gi, 'Order O-R-D $1');
 
   // 7. Expand telecom / payment acronyms for clear voice
   text = text.replace(/\bCOD\b/g, 'Cash on Delivery');

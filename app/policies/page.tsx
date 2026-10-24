@@ -7,28 +7,18 @@ import {
   RotateCcw,
   Ban,
   CreditCard,
-  AlertTriangle,
   ArrowLeft,
-  ArrowRight,
   CheckCircle2,
   XCircle,
   Sparkles,
-  Cpu,
-  Code2,
   Compass,
-  HelpCircle,
   Play,
-  BookOpen,
   Sliders,
-  Mic,
-  Search,
-  Volume2,
-  Terminal
+  Code2
 } from 'lucide-react';
 import Link from 'next/link';
 import { BRAND_POLICIES, AURA_BRAND_OVERVIEW } from '@/lib/brandKnowledge';
 
-// Interactive policy scenarios for evaluators & viewers to test
 interface PolicyScenario {
   id: string;
   title: string;
@@ -78,41 +68,40 @@ const POLICY_SCENARIOS: PolicyScenario[] = [
   {
     id: 'out-of-scope-flight',
     title: 'Out of Scope Request (Flight Booking)',
-    customerPrompt: '"Can you book me a flight ticket to Goa for this weekend?"',
+    customerPrompt: '"Can you book me a flight ticket to Goa this weekend?"',
     category: 'out_of_scope',
-    policyClause: 'Section 2.B: Out-of-Scope Guardrails — Agent must politely decline queries outside Aura Skincare.',
-    codeCheck: "intentClassifier(text) => category === 'OUT_OF_SCOPE' => deflect gracefully",
+    policyClause: 'Brand Guardrails — Agent strictly restricts conversation to Aura Skincare products, policies, and orders.',
+    codeCheck: "isOutOfScope(prompt) => matches airline/booking intent => deflects politely",
     verdict: 'DEFLECTED',
-    ariaResponse: '"I would love to help, but I am Aria, the customer specialist for Aura Skincare! I can only assist with your skincare orders, shipping, and product recommendations. How can I help you with your skincare routine today?"',
-    rationale: 'Maintains brand persona integrity without falling into prompt injection traps or general chatbot drifting.'
+    ariaResponse: '"I am specifically specialized in Aura Skincare products and order assistance. While I would love to help you plan a holiday, I can only assist with skincare recommendations, order tracking, and brand policies!"',
+    rationale: 'Immediate polite deflection preserves brand reputation and operational integrity.'
   },
   {
-    id: 'cod-limit-exceeded',
+    id: 'cod-threshold',
     title: 'High-Value COD Inquiry (₹3,200 Cart Value)',
-    customerPrompt: '"My order total is ₹3,200. Can I choose Cash on Delivery?"',
+    customerPrompt: '"My total cart is 3,200 Rupees. Can I pay Cash on Delivery?"',
     category: 'payments',
-    policyClause: 'Section 3: Cash on Delivery — COD is available for orders up to ₹2,500 only. Orders above ₹2,500 require prepaid payment.',
-    codeCheck: "cartValue > 2500 => cod_eligible = false => suggest UPI / Prepaid",
+    policyClause: 'Section 3: Cash on Delivery — COD is supported for domestic orders up to ₹2,500 maximum.',
+    codeCheck: "isCodEligible(cartValue) => 3200 > 2500 => requires prepaid checkout",
     verdict: 'REFUSED',
-    ariaResponse: '"Cash on Delivery is available for orders up to ₹2,500. For orders above this amount, we require prepaid payment via UPI, Credit Card, or Net Banking for secure fulfillment. You can easily complete payment via UPI at checkout!"',
-    rationale: 'Accurately quotes the ₹2,500 threshold and offers smooth prepaid alternatives.'
+    ariaResponse: '"Our Cash on Delivery service is available for orders up to 2,500 Rupees. Because your order total is 3,200 Rupees, it will need to be placed via prepaid payment such as UPI or card at checkout."',
+    rationale: 'Aria accurately explains the ₹2,500 COD threshold and guides the customer to prepaid payment methods.'
   },
   {
-    id: 'invalid-order-id',
+    id: 'invalid-order-lookup',
     title: 'Non-Existent Order ID (ORD-999)',
-    customerPrompt: '"Where is my package for order ORD-999?"',
+    customerPrompt: '"Can you tell me where my order ORD-999 is?"',
     category: 'invalid_id',
-    policyClause: 'Section 2.B: Graceful Degradation — If order ID does not exist, ask politely to verify rather than hallucinating.',
-    codeCheck: "lookupOrder('ORD-999') => null => graceful recovery prompt",
+    policyClause: 'Graceful Degradation — Handle missing orders without crashing or hallucinating delivery dates.',
+    codeCheck: "getOrderDetails('ORD-999') => returns null => prompts customer for correct ID",
     verdict: 'CLARIFICATION_REQUESTED',
-    ariaResponse: '"I looked through our database, but I couldn\'t locate any order matching ORD-999. Could you please double-check your order confirmation email or SMS and share the 3-digit order number again?"',
-    rationale: 'Graceful degradation prevents hallucinating a fake tracking number or courier status.'
+    ariaResponse: '"I could not locate order ORD-999 in our system. Could you please double-check your order confirmation email or SMS and verify the ID for me?"',
+    rationale: 'Aria reports the absence of the order clearly without inventing fake tracking numbers or ETA.'
   }
 ];
 
 export default function PoliciesPage() {
   const [selectedScenario, setSelectedScenario] = useState<PolicyScenario>(POLICY_SCENARIOS[0]);
-  const [activeTab, setActiveTab] = useState<'all' | 'simulator'>('all');
 
   const getPolicyIcon = (category: string) => {
     switch (category) {
@@ -125,406 +114,320 @@ export default function PoliciesPage() {
   };
 
   return (
-    <div className="container" style={{ paddingTop: '36px', paddingBottom: '60px' }}>
-
-      {/* ── Page Header ───────────────────────────────────────────────────────── */}
-      <div style={{ marginBottom: '32px' }}>
+    <div className="container" style={{ paddingTop: '32px', paddingBottom: '60px' }}>
+      {/* ── Header ───────────────────────────────────────────────────────────── */}
+      <div style={{ marginBottom: '24px' }}>
         <Link href="/" style={{
           display: 'inline-flex',
           alignItems: 'center',
           gap: '6px',
           color: 'var(--text-secondary)',
-          fontSize: '13px',
-          marginBottom: '12px',
-          transition: 'color 0.2s ease'
+          fontSize: '12px',
+          marginBottom: '8px'
         }}>
-          <ArrowLeft size={14} />
-          <span>Return to Voice Studio</span>
+          <ArrowLeft size={13} />
+          <span>Return to Voice Concierge</span>
         </Link>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
-          <div>
-            <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '36px', fontWeight: 800, color: '#FFFFFF', marginBottom: '8px' }}>
-              Brand Policies & Knowledge Center
-            </h1>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '15px', maxWidth: '780px' }}>
-              Official brand policies governing shipping, cancellations, unopened returns, and COD thresholds for Aura Skincare customers.
-            </p>
-          </div>
-
-          {/* Tab Selector */}
-          <div style={{
-            display: 'inline-flex',
-            padding: '4px',
-            borderRadius: 'var(--radius-full)',
-            background: 'rgba(255, 255, 255, 0.05)',
-            border: '1px solid var(--bg-glass-border)'
-          }}>
-            <button
-              onClick={() => setActiveTab('all')}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '8px 18px',
-                borderRadius: 'var(--radius-full)',
-                fontSize: '13px',
-                fontWeight: 600,
-                background: activeTab === 'all' ? 'var(--gold-primary)' : 'transparent',
-                color: activeTab === 'all' ? '#071912' : 'var(--text-secondary)',
-                transition: 'all 0.2s ease',
-                cursor: 'pointer'
-              }}
-            >
-              <BookOpen size={14} />
-              <span>Brand Policies</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('simulator')}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '8px 18px',
-                borderRadius: 'var(--radius-full)',
-                fontSize: '13px',
-                fontWeight: 600,
-                background: activeTab === 'simulator' ? 'var(--gold-primary)' : 'transparent',
-                color: activeTab === 'simulator' ? '#071912' : 'var(--text-secondary)',
-                transition: 'all 0.2s ease',
-                cursor: 'pointer'
-              }}
-            >
-              <Sliders size={14} />
-              <span>Live Policy Simulator</span>
-            </button>
-          </div>
-        </div>
+        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '28px', fontWeight: 700, color: '#FFFFFF', marginBottom: '4px' }}>
+          Brand Policies &amp; Knowledge Center
+        </h1>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '13px', maxWidth: '780px' }}>
+          Official rules governing delivery thresholds, return eligibility, order cancellations, and payment limits for Aura Skincare.
+        </p>
       </div>
 
       {/* ── Brand Overview Banner ────────────────────────────────────────────── */}
       <div className="glass-card" style={{
-        marginBottom: '32px',
-        background: 'linear-gradient(135deg, rgba(16, 75, 56, 0.45) 0%, rgba(7, 25, 18, 0.85) 100%)',
-        border: '1px solid var(--bg-glass-border)',
-        padding: '24px 28px'
+        marginBottom: '24px',
+        padding: '20px 24px'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px', marginBottom: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginBottom: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div style={{
-              width: '42px',
-              height: '42px',
-              borderRadius: '12px',
-              background: 'rgba(212, 175, 55, 0.15)',
-              border: '1px solid var(--gold-primary)',
+              width: '36px',
+              height: '36px',
+              borderRadius: 'var(--radius-sm)',
+              background: 'var(--bg-surface-elevated)',
+              border: '1px solid var(--border-gold)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               color: 'var(--gold-primary)'
             }}>
-              <ShieldCheck size={22} />
+              <ShieldCheck size={18} />
             </div>
             <div>
-              <h2 style={{ fontSize: '20px', fontWeight: 700, color: '#FFFFFF' }}>{AURA_BRAND_OVERVIEW.name}</h2>
-              <span style={{ fontSize: '13px', color: 'var(--gold-light)', fontWeight: 500 }}>{AURA_BRAND_OVERVIEW.tagline}</span>
+              <h2 style={{ fontSize: '16px', fontWeight: 700, color: '#FFFFFF' }}>{AURA_BRAND_OVERVIEW.name}</h2>
+              <span style={{ fontSize: '12px', color: 'var(--gold-light)' }}>{AURA_BRAND_OVERVIEW.tagline}</span>
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <span style={{
-              display: 'inline-flex', alignItems: 'center', gap: '6px',
-              padding: '6px 14px', borderRadius: 'var(--radius-full)',
-              background: 'rgba(16, 185, 129, 0.15)', border: '1px solid var(--emerald-accent)',
-              fontSize: '12px', color: 'var(--emerald-accent)', fontWeight: 600
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px',
+              padding: '4px 10px',
+              borderRadius: 'var(--radius-full)',
+              background: 'var(--emerald-subtle)',
+              border: '1px solid var(--emerald-border)',
+              fontSize: '11px',
+              color: 'var(--emerald-accent)',
+              fontWeight: 600
             }}>
-              <CheckCircle2 size={13} />
-              <span>Zero-Hallucination Guardrails</span>
+              <CheckCircle2 size={12} />
+              <span>Deterministic Enforcement</span>
             </span>
             <span style={{
-              display: 'inline-flex', alignItems: 'center', gap: '6px',
-              padding: '6px 14px', borderRadius: 'var(--radius-full)',
-              background: 'rgba(212, 175, 55, 0.15)', border: '1px solid var(--gold-primary)',
-              fontSize: '12px', color: 'var(--gold-light)', fontWeight: 600
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px',
+              padding: '4px 10px',
+              borderRadius: 'var(--radius-full)',
+              background: 'var(--gold-subtle)',
+              border: '1px solid var(--border-gold)',
+              fontSize: '11px',
+              color: 'var(--gold-light)',
+              fontWeight: 600
             }}>
-              <span>🇮🇳 Indian Accent (en-IN)</span>
+              <span>Indian English Cadence (en-IN)</span>
             </span>
           </div>
         </div>
 
-        <p style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: '14px' }}>
+        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '10px' }}>
           {AURA_BRAND_OVERVIEW.description}
         </p>
 
-        <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', fontSize: '13px', color: 'var(--text-muted)' }}>
+        <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', fontSize: '12px', color: 'var(--text-muted)' }}>
           <span>Agent Persona: <strong style={{ color: '#FFF' }}>Aria</strong></span>
           <span>•</span>
-          <span>Voice Cadence: <strong style={{ color: '#FFF' }}>Concise (max 2-3 spoken sentences)</strong></span>
+          <span>Spoken Turn Budget: <strong style={{ color: '#FFF' }}>Max 2–3 Sentences</strong></span>
           <span>•</span>
-          <span>Decision Logic: <strong style={{ color: '#FFF' }}>Code-Level Deterministic Verification</strong></span>
+          <span>Validation Gate: <strong style={{ color: '#FFF' }}>TypeScript Rules in Code</strong></span>
         </div>
       </div>
 
-      {/* ── TAB 1: ALL BRAND POLICIES (DEEP DIVE) ────────────────────────────── */}
-      {(activeTab === 'all' || activeTab === 'simulator') && (
-        <div style={{ marginBottom: '40px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '18px' }}>
-            <Compass size={20} color="var(--gold-primary)" />
-            <h2 style={{ fontSize: '22px', fontWeight: 700, color: '#FFF' }}>Core Brand Policy Matrix</h2>
-          </div>
-
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
-            gap: '20px'
-          }}>
-            {BRAND_POLICIES.map((policy) => {
-              const Icon = getPolicyIcon(policy.category);
-              return (
-                <div key={policy.id} className="glass-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '24px' }}>
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
-                      <div style={{
-                        width: '40px',
-                        height: '40px',
-                        borderRadius: '10px',
-                        background: 'rgba(212, 175, 55, 0.12)',
-                        border: '1px solid var(--gold-primary)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: 'var(--gold-primary)'
-                      }}>
-                        <Icon size={20} />
-                      </div>
-                      <div>
-                        <h3 style={{ fontSize: '17px', fontWeight: 700, color: '#FFFFFF' }}>
-                          {policy.title}
-                        </h3>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                          Category: {policy.category}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Summary Rule Box */}
-                    <div style={{
-                      padding: '12px 14px',
-                      borderRadius: 'var(--radius-sm)',
-                      background: 'rgba(212, 175, 55, 0.08)',
-                      border: '1px solid rgba(212, 175, 55, 0.22)',
-                      fontSize: '12px',
-                      color: 'var(--gold-light)',
-                      marginBottom: '16px',
-                      lineHeight: 1.5
-                    }}>
-                      <strong style={{ color: '#FFF' }}>Canonical Rule:</strong> {policy.summary}
-                    </div>
-
-                    {/* Detailed clauses */}
-                    <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                      {policy.details.map((detail, idx) => (
-                        <li key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                          <CheckCircle2 size={15} color="var(--emerald-accent)" style={{ flexShrink: 0, marginTop: '3px' }} />
-                          <span>{detail}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <div style={{
-                    marginTop: '20px',
-                    paddingTop: '14px',
-                    borderTop: '1px solid rgba(255, 255, 255, 0.06)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    fontSize: '12px',
-                    color: 'var(--text-muted)'
-                  }}>
-                    <span>Enforcement Type:</span>
-                    <span style={{ color: 'var(--emerald-accent)', fontWeight: 600 }}>Deterministic Code Gate</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+      {/* ── Core Policy Matrix ────────────────────────────────────────────── */}
+      <div style={{ marginBottom: '32px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+          <Compass size={16} color="var(--gold-primary)" />
+          <h2 style={{ fontSize: '16px', fontWeight: 700, color: '#FFFFFF' }}>Core Brand Policy Matrix</h2>
         </div>
-      )}
 
-      {/* ── TAB 2: LIVE POLICY SIMULATOR / PLAYGROUND ────────────────────────── */}
-      {(activeTab === 'all' || activeTab === 'simulator') && (
-        <div style={{ marginBottom: '40px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', marginBottom: '18px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Cpu size={20} color="var(--gold-primary)" />
-              <h2 style={{ fontSize: '22px', fontWeight: 700, color: '#FFF' }}>Interactive Policy Enforcement Simulator</h2>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+          gap: '16px'
+        }}>
+          {BRAND_POLICIES.map((policy) => {
+            const Icon = getPolicyIcon(policy.category);
+            return (
+              <div
+                key={policy.id}
+                className="glass-card"
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  padding: '20px'
+                }}
+              >
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+                    <div style={{
+                      width: '34px',
+                      height: '34px',
+                      borderRadius: 'var(--radius-xs)',
+                      background: 'var(--bg-inset)',
+                      border: '1px solid var(--border-gold)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'var(--gold-primary)'
+                    }}>
+                      <Icon size={16} />
+                    </div>
+                    <div>
+                      <h3 style={{ fontSize: '15px', fontWeight: 600, color: '#FFFFFF' }}>
+                        {policy.title}
+                      </h3>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        {policy.category}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Summary Box */}
+                  <div style={{
+                    padding: '10px 12px',
+                    borderRadius: 'var(--radius-sm)',
+                    background: 'var(--bg-surface-elevated)',
+                    border: '1px solid var(--border-gold)',
+                    fontSize: '12px',
+                    color: 'var(--gold-light)',
+                    marginBottom: '14px',
+                    lineHeight: 1.5
+                  }}>
+                    <strong style={{ color: '#FFFFFF' }}>Rule:</strong> {policy.summary}
+                  </div>
+
+                  {/* Detailed clauses */}
+                  <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {policy.details.map((detail, idx) => (
+                      <li key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                        <CheckCircle2 size={13} color="var(--emerald-accent)" style={{ flexShrink: 0, marginTop: '3px' }} />
+                        <span>{detail}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div style={{
+                  marginTop: '16px',
+                  paddingTop: '10px',
+                  borderTop: '1px solid var(--border-subtle)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  fontSize: '11px',
+                  color: 'var(--text-muted)'
+                }}>
+                  <span>Enforcement Type:</span>
+                  <span style={{ color: 'var(--emerald-accent)', fontWeight: 600 }}>Deterministic Code Gate</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Interactive Policy Enforcement Simulator ────────────────────────── */}
+      <div style={{ marginBottom: '32px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Sliders size={16} color="var(--gold-primary)" />
+            <h2 style={{ fontSize: '16px', fontWeight: 700, color: '#FFFFFF' }}>Interactive Policy Enforcement Simulator</h2>
+          </div>
+          <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+            Inspect how Aria evaluates real customer inquiries against brand code gates
+          </span>
+        </div>
+
+        {/* Scenario Selection Chips */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '16px' }}>
+          {POLICY_SCENARIOS.map((sc) => {
+            const isSelected = selectedScenario.id === sc.id;
+            return (
+              <button
+                key={sc.id}
+                type="button"
+                onClick={() => setSelectedScenario(sc)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '7px 14px',
+                  borderRadius: 'var(--radius-sm)',
+                  background: isSelected ? 'var(--bg-surface-elevated)' : 'var(--bg-inset)',
+                  border: `1px solid ${isSelected ? 'var(--border-gold)' : 'var(--border-subtle)'}`,
+                  color: isSelected ? 'var(--gold-light)' : 'var(--text-secondary)',
+                  fontSize: '12px',
+                  fontWeight: isSelected ? 600 : 500,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <Play size={10} fill={isSelected ? 'var(--gold-primary)' : 'transparent'} color={isSelected ? 'var(--gold-primary)' : 'currentColor'} />
+                <span>{sc.title}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Active Scenario Card */}
+        <div className="glass-card" style={{ padding: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+            <div>
+              <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--gold-primary)', fontWeight: 600 }}>
+                Selected Test Scenario
+              </span>
+              <h3 style={{ fontSize: '17px', fontWeight: 700, color: '#FFFFFF', marginTop: '2px' }}>
+                {selectedScenario.title}
+              </h3>
             </div>
-            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-              Click any scenario below to inspect how Aria&apos;s guardrails execute in real time:
+            <span style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '4px 12px',
+              borderRadius: 'var(--radius-full)',
+              background: selectedScenario.verdict === 'APPROVED' ? 'var(--emerald-subtle)' : 'rgba(239, 68, 68, 0.12)',
+              border: `1px solid ${selectedScenario.verdict === 'APPROVED' ? 'var(--emerald-border)' : 'rgba(239, 68, 68, 0.3)'}`,
+              color: selectedScenario.verdict === 'APPROVED' ? 'var(--emerald-accent)' : '#F87171',
+              fontSize: '11px',
+              fontWeight: 700
+            }}>
+              {selectedScenario.verdict === 'APPROVED' ? <CheckCircle2 size={13} /> : <XCircle size={13} />}
+              <span>DECISION: {selectedScenario.verdict}</span>
             </span>
           </div>
 
-          {/* Scenario Selection Chips */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '20px' }}>
-            {POLICY_SCENARIOS.map((sc) => {
-              const isSelected = selectedScenario.id === sc.id;
-              return (
-                <button
-                  key={sc.id}
-                  onClick={() => setSelectedScenario(sc)}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    padding: '10px 16px',
-                    borderRadius: 'var(--radius-md)',
-                    background: isSelected ? 'rgba(212, 175, 55, 0.22)' : 'rgba(255, 255, 255, 0.04)',
-                    border: `1px solid ${isSelected ? 'var(--gold-primary)' : 'rgba(255, 255, 255, 0.1)'}`,
-                    color: isSelected ? 'var(--gold-light)' : 'var(--text-secondary)',
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  <Play size={12} fill={isSelected ? 'var(--gold-primary)' : 'transparent'} />
-                  <span>{sc.title}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Detailed Scenario Execution Card */}
-          <div className="glass-card" style={{
-            background: 'rgba(7, 25, 18, 0.9)',
-            border: '1px solid var(--gold-primary)',
-            padding: '28px',
-            boxShadow: '0 8px 30px rgba(0, 0, 0, 0.4)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
-              <div>
-                <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--gold-primary)', fontWeight: 700 }}>
-                  Active Test Scenario
-                </span>
-                <h3 style={{ fontSize: '20px', fontWeight: 800, color: '#FFF', marginTop: '2px' }}>
-                  {selectedScenario.title}
-                </h3>
-              </div>
-
-              {/* Verdict Pill */}
-              <div style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '8px 16px',
-                borderRadius: 'var(--radius-full)',
-                background: selectedScenario.verdict === 'APPROVED' ? 'rgba(16, 185, 129, 0.18)'
-                  : selectedScenario.verdict === 'REFUSED' ? 'rgba(239, 68, 68, 0.18)'
-                  : selectedScenario.verdict === 'DEFLECTED' ? 'rgba(245, 158, 11, 0.18)'
-                  : 'rgba(139, 92, 246, 0.18)',
-                border: `1px solid ${selectedScenario.verdict === 'APPROVED' ? 'var(--emerald-accent)'
-                  : selectedScenario.verdict === 'REFUSED' ? '#EF4444'
-                  : selectedScenario.verdict === 'DEFLECTED' ? '#F59E0B'
-                  : '#8B5CF6'}`,
-                color: '#FFF',
-                fontSize: '12px',
-                fontWeight: 700
-              }}>
-                {selectedScenario.verdict === 'APPROVED' && <CheckCircle2 size={14} color="var(--emerald-accent)" />}
-                {selectedScenario.verdict === 'REFUSED' && <XCircle size={14} color="#EF4444" />}
-                {selectedScenario.verdict === 'DEFLECTED' && <AlertTriangle size={14} color="#F59E0B" />}
-                {selectedScenario.verdict === 'CLARIFICATION_REQUESTED' && <HelpCircle size={14} color="#8B5CF6" />}
-                <span>DECISION: {selectedScenario.verdict}</span>
-              </div>
-            </div>
-
-            {/* Step-by-step Execution Grid */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-              gap: '20px',
-              marginBottom: '20px'
-            }}>
-              {/* Step 1: User Spoken Prompt */}
-              <div style={{
-                background: 'rgba(255, 255, 255, 0.03)',
-                padding: '16px',
-                borderRadius: 'var(--radius-md)',
-                border: '1px solid rgba(255, 255, 255, 0.06)'
-              }}>
-                <span style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 600 }}>
-                  1. Spoken Customer Utterance
-                </span>
-                <p style={{ fontSize: '14px', color: '#FFF', fontStyle: 'italic', marginTop: '6px', lineHeight: 1.5 }}>
-                  {selectedScenario.customerPrompt}
-                </p>
-              </div>
-
-              {/* Step 2: Triggered Policy Rule */}
-              <div style={{
-                background: 'rgba(212, 175, 55, 0.05)',
-                padding: '16px',
-                borderRadius: 'var(--radius-md)',
-                border: '1px solid rgba(212, 175, 55, 0.15)'
-              }}>
-                <span style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--gold-primary)', fontWeight: 600 }}>
-                  2. Applicable Brand Policy Clause
-                </span>
-                <p style={{ fontSize: '13px', color: 'var(--gold-light)', marginTop: '6px', lineHeight: 1.5 }}>
-                  {selectedScenario.policyClause}
-                </p>
-              </div>
-
-              {/* Step 3: Deterministic Code Validation */}
-              <div style={{
-                background: 'rgba(0, 0, 0, 0.4)',
-                padding: '16px',
-                borderRadius: 'var(--radius-md)',
-                border: '1px solid rgba(255, 255, 255, 0.08)'
-              }}>
-                <span style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--emerald-accent)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Code2 size={12} />
-                  <span>3. Deterministic Code Gate</span>
-                </span>
-                <pre style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '12px',
-                  color: '#A7F3D0',
-                  marginTop: '6px',
-                  whiteSpace: 'pre-wrap',
-                  lineHeight: 1.4
-                }}>
-                  {selectedScenario.codeCheck}
-                </pre>
-              </div>
-            </div>
-
-            {/* Step 4: Aria's Spoken Response */}
-            <div style={{
-              background: 'linear-gradient(135deg, rgba(212, 175, 55, 0.12) 0%, rgba(16, 75, 56, 0.2) 100%)',
-              padding: '20px',
-              borderRadius: 'var(--radius-md)',
-              border: '1px solid var(--gold-primary)',
-              marginBottom: '16px'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                <Sparkles size={16} color="var(--gold-primary)" />
-                <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--gold-light)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  4. Aria&apos;s Voice Response (Synthesized in NeerjaNeural en-IN)
-                </span>
-              </div>
-              <p style={{ fontSize: '15px', color: '#FFF', lineHeight: 1.6, fontWeight: 500 }}>
-                {selectedScenario.ariaResponse}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px', marginBottom: '16px' }}>
+            <div className="sub-card">
+              <span style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 600 }}>
+                1. Customer Utterance
+              </span>
+              <p style={{ fontSize: '13px', color: '#FFFFFF', fontStyle: 'italic', marginTop: '4px', lineHeight: 1.5 }}>
+                {selectedScenario.customerPrompt}
               </p>
             </div>
 
-            {/* Rationale & Guardrail Explanation */}
-            <div style={{ fontSize: '13px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <ShieldCheck size={16} color="var(--emerald-accent)" />
-              <span><strong>Policy Rule:</strong> {selectedScenario.rationale}</span>
+            <div className="sub-card">
+              <span style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--gold-primary)', fontWeight: 600 }}>
+                2. Applicable Brand Policy Clause
+              </span>
+              <p style={{ fontSize: '12px', color: 'var(--gold-light)', marginTop: '4px', lineHeight: 1.5 }}>
+                {selectedScenario.policyClause}
+              </p>
+            </div>
+
+            <div className="sub-card">
+              <span style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--emerald-accent)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <Code2 size={11} />
+                <span>3. Deterministic Code Gate</span>
+              </span>
+              <pre style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: '#A7F3D0', marginTop: '4px', whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>
+                {selectedScenario.codeCheck}
+              </pre>
             </div>
           </div>
+
+          {/* Voice Response Preview */}
+          <div style={{
+            padding: '16px',
+            borderRadius: 'var(--radius-sm)',
+            background: 'var(--bg-inset)',
+            border: '1px solid var(--border-gold)',
+            marginBottom: '12px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+              <Sparkles size={14} color="var(--gold-primary)" />
+              <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--gold-light)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Aria Spoken Response (Synthesized en-IN)
+              </span>
+            </div>
+            <p style={{ fontSize: '14px', color: '#FFFFFF', lineHeight: 1.6, fontWeight: 500 }}>
+              {selectedScenario.ariaResponse}
+            </p>
+          </div>
+
+          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <ShieldCheck size={14} color="var(--emerald-accent)" />
+            <span><strong>Engineering Rationale:</strong> {selectedScenario.rationale}</span>
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
