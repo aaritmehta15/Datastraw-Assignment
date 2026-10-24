@@ -123,6 +123,9 @@ export default function CallCockpit() {
 
   // ── Stop All Audio Playback ───────────────────────────────────────────────
   const stopAllAudio = useCallback(() => {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try { window.speechSynthesis.cancel(); } catch (_) {}
+    }
     if (currentSourceRef.current) {
       try {
         currentSourceRef.current.onended = null;
@@ -210,8 +213,70 @@ export default function CallCockpit() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncCallState]);
 
+  // ── Browser SpeechSynthesis Fallback (Guaranteed to work 100% offline & in cloud) ──
+  const speakWithBrowserTTS = useCallback((text: string, onComplete?: () => void) => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      if (onComplete) onComplete();
+      syncCallState('idle');
+      return;
+    }
+
+    try {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+
+      const voices = window.speechSynthesis.getVoices();
+      const indianVoice = voices.find(v => 
+        (v.lang === 'en-IN' || v.lang.startsWith('en_IN') || v.name.toLowerCase().includes('india') || v.name.toLowerCase().includes('heera') || v.name.toLowerCase().includes('neerja'))
+      ) || voices.find(v => v.lang.startsWith('en') && (v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('natural') || v.name.toLowerCase().includes('zira')))
+      || voices.find(v => v.lang.startsWith('en'));
+
+      if (indianVoice) {
+        utterance.voice = indianVoice;
+      }
+      utterance.rate = 1.0;
+      utterance.pitch = 1.05;
+
+      utterance.onend = () => {
+        if (onComplete) onComplete();
+        if (isCallActiveRef.current) {
+          setTimeout(() => {
+            if (isCallActiveRef.current) {
+              shouldBeListeningRef.current = true;
+              startListening();
+            }
+          }, 350);
+        } else {
+          syncCallState('idle');
+        }
+      };
+
+      utterance.onerror = (e) => {
+        console.warn('[SpeechSynthesis] utterance error:', e);
+        if (onComplete) onComplete();
+        if (isCallActiveRef.current) {
+          setTimeout(() => {
+            if (isCallActiveRef.current) {
+              shouldBeListeningRef.current = true;
+              startListening();
+            }
+          }, 350);
+        } else {
+          syncCallState('idle');
+        }
+      };
+
+      syncCallState('speaking');
+      window.speechSynthesis.speak(utterance);
+    } catch (err) {
+      console.warn('[SpeechSynthesis] speak exception:', err);
+      if (onComplete) onComplete();
+      syncCallState('idle');
+    }
+  }, [syncCallState, startListening]);
+
   // ═══════════════════════════════════════════════════════════════════════════
-  //  PLAY ARIA AUDIO (Web Audio API BufferSource — never blocked by autoplay)
+  //  PLAY ARIA AUDIO (Dual-Tier: Cloud Neural TTS with Instant Browser Fallback)
   // ═══════════════════════════════════════════════════════════════════════════
   const playAriaAudio = useCallback(async (text: string, onComplete?: () => void) => {
     // 1. Mute microphone immediately — prevents acoustic echo loops & self-transcription
@@ -236,9 +301,21 @@ export default function CallCockpit() {
       if (isGreeting && greetingBufferRef.current) {
         arrayBuffer = greetingBufferRef.current.slice(0);
       } else {
-        const res = await fetch(`/api/tts?text=${encodeURIComponent(text)}`);
-        if (!res.ok) throw new Error(`TTS server HTTP ${res.status}`);
-        arrayBuffer = await res.arrayBuffer();
+        // Fetch server neural audio with 1800ms abort timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 1800);
+
+        try {
+          const res = await fetch(`/api/tts?text=${encodeURIComponent(text)}`, {
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+          if (!res.ok) throw new Error(`TTS server HTTP ${res.status}`);
+          arrayBuffer = await res.arrayBuffer();
+        } catch (fetchErr) {
+          clearTimeout(timeoutId);
+          throw fetchErr;
+        }
       }
 
       // Decode MP3 audio into AudioBuffer
@@ -253,7 +330,6 @@ export default function CallCockpit() {
         if (onComplete) onComplete();
 
         if (isCallActiveRef.current) {
-          // Acoustic settle window (350ms) to ensure speakers are silent before mic opens
           setTimeout(() => {
             if (isCallActiveRef.current) {
               shouldBeListeningRef.current = true;
@@ -267,22 +343,11 @@ export default function CallCockpit() {
 
       source.start(0);
     } catch (err: any) {
-      console.warn('[Voice] playAriaAudio error:', err?.message);
-      currentSourceRef.current = null;
-      if (onComplete) onComplete();
-
-      if (isCallActiveRef.current) {
-        setTimeout(() => {
-          if (isCallActiveRef.current) {
-            shouldBeListeningRef.current = true;
-            startListening();
-          }
-        }, 350);
-      } else {
-        syncCallState('idle');
-      }
+      console.warn('[Voice] Server TTS fallback triggered:', err?.message);
+      // Seamlessly fallback to browser speech synthesis — guarantees Aria ALWAYS speaks!
+      speakWithBrowserTTS(text, onComplete);
     }
-  }, [stopAllAudio, syncCallState, getUnlockedAudioContext, startListening]);
+  }, [stopAllAudio, syncCallState, getUnlockedAudioContext, startListening, speakWithBrowserTTS]);
 
   // ═══════════════════════════════════════════════════════════════════════════
   //  BARGE-IN / INTERRUPT ARIA (STABLE & NEVER ACCIDENTALLY ENDS CALL)

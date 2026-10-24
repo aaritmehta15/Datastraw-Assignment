@@ -18,22 +18,34 @@ const PREWARM = [
 ];
 
 async function synthesize(text: string): Promise<Buffer> {
+  // Clean special characters and parentheses that break SSML parsing
+  const cleanText = text
+    .replace(/[()]/g, '')
+    .replace(/[<>&]/g, ' ')
+    .trim();
+
   const tts = new MsEdgeTTS();
-  // en-IN-NeerjaNeural: authentic Indian English female, warm, professional
   await tts.setMetadata('en-IN-NeerjaNeural', OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
-  const { audioStream } = tts.toStream(text);
+  const { audioStream } = tts.toStream(cleanText);
 
   return new Promise<Buffer>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      try { tts.close(); } catch (_) {}
+      reject(new Error('TTS_SOCKET_TIMEOUT'));
+    }, 3500);
+
     const chunks: Buffer[] = [];
     audioStream.on('data', (chunk: any) => {
       chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
     });
     audioStream.on('end', () => {
-      tts.close();
+      clearTimeout(timeout);
+      try { tts.close(); } catch (_) {}
       resolve(Buffer.concat(chunks));
     });
     audioStream.on('error', (err: any) => {
-      tts.close();
+      clearTimeout(timeout);
+      try { tts.close(); } catch (_) {}
       reject(err);
     });
   });
