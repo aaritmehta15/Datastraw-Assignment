@@ -227,7 +227,9 @@ export default function CallCockpit() {
 
       const voices = window.speechSynthesis.getVoices();
       const indianVoice = voices.find(v => 
-        (v.lang === 'en-IN' || v.lang.startsWith('en_IN') || v.name.toLowerCase().includes('india') || v.name.toLowerCase().includes('heera') || v.name.toLowerCase().includes('neerja'))
+        v.name.toLowerCase().includes('neerja') || v.name.includes('en-IN-NeerjaNeural')
+      ) || voices.find(v => 
+        (v.lang === 'en-IN' || v.lang.startsWith('en_IN') || v.name.toLowerCase().includes('india') || v.name.toLowerCase().includes('heera'))
       ) || voices.find(v => v.lang.startsWith('en') && (v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('natural') || v.name.toLowerCase().includes('zira')))
       || voices.find(v => v.lang.startsWith('en'));
 
@@ -301,9 +303,9 @@ export default function CallCockpit() {
       if (isGreeting && greetingBufferRef.current) {
         arrayBuffer = greetingBufferRef.current.slice(0);
       } else {
-        // Fetch server neural audio with 1800ms abort timeout
+        // Fetch server neural audio with 4800ms abort timeout
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 1800);
+        const timeoutId = setTimeout(() => controller.abort(), 4800);
 
         try {
           const res = await fetch(`/api/tts?text=${encodeURIComponent(text)}`, {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { EdgeTTS } from '@andresaya/edge-tts';
+import { EdgeTTS } from 'memo-node-edge-tts';
+import { randomBytes } from 'crypto';
 import { normalizeTextForVoice } from '@/lib/voiceNormalizer';
 
 // Must be Node.js runtime
@@ -9,9 +10,6 @@ export const dynamic = 'force-dynamic';
 // In-process RAM cache: phrase → Buffer (max 100 entries, ~5MB)
 const cache = new Map<string, Buffer>();
 
-// Shared client with updated Sec-MS-GEC v2 protocol
-const edgeTtsClient = new EdgeTTS();
-
 // Pre-warm frequently used Aria phrases at server startup
 const PREWARM = [
   'Namaste! I am Aria from Aura Skincare. How can I help with your orders or skincare questions today?',
@@ -20,6 +18,19 @@ const PREWARM = [
   'I experienced a brief connection delay. Could you please repeat that?',
 ];
 
+function escapeXml(unsafe: string): string {
+  return unsafe.replace(/[<>&"']/g, (c) => {
+    switch (c) {
+      case '<': return '&lt;';
+      case '>': return '&gt;';
+      case '&': return '&amp;';
+      case '"': return '&quot;';
+      case "'": return '&apos;';
+      default: return c;
+    }
+  });
+}
+
 async function synthesize(text: string): Promise<Buffer> {
   // Clean special characters and parentheses that break SSML parsing
   const cleanText = text
@@ -27,8 +38,58 @@ async function synthesize(text: string): Promise<Buffer> {
     .replace(/[<>&]/g, ' ')
     .trim();
 
-  const result = await edgeTtsClient.generate(cleanText, 'en-IN-NeerjaNeural');
-  return result.audio;
+  const tts = new EdgeTTS({
+    voice: 'en-IN-NeerjaNeural',
+    lang: 'en-IN',
+    outputFormat: 'audio-24khz-48kbitrate-mono-mp3',
+    timeout: 8000,
+  });
+
+  const ws = await (tts as any)._connectWebSocket();
+
+  return new Promise<Buffer>((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    const timeout = setTimeout(() => {
+      try { ws.close(); } catch (_) {}
+      reject(new Error('TTS_TIMEOUT'));
+    }, 7500);
+
+    ws.on('message', (data: any, isBinary: boolean) => {
+      if (isBinary) {
+        const sep = 'Path:audio\r\n';
+        const idx = data.indexOf(sep);
+        if (idx !== -1) {
+          chunks.push(data.subarray(idx + sep.length));
+        }
+      } else {
+        const msg = data.toString();
+        if (msg.includes('Path:turn.end')) {
+          clearTimeout(timeout);
+          try { ws.close(); } catch (_) {}
+          resolve(Buffer.concat(chunks));
+        }
+      }
+    });
+
+    ws.on('error', (err: any) => {
+      clearTimeout(timeout);
+      try { ws.close(); } catch (_) {}
+      reject(err);
+    });
+
+    const reqId = randomBytes(16).toString('hex');
+    const ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="en-IN">
+  <voice name="en-IN-NeerjaNeural">
+    <prosody rate="default" pitch="default" volume="default">
+      ${escapeXml(cleanText)}
+    </prosody>
+  </voice>
+</speak>`;
+
+    ws.send(
+      `X-RequestId:${reqId}\r\nContent-Type:application/ssml+xml\r\nPath:ssml\r\n\r\n${ssml}`,
+    );
+  });
 }
 
 // Kick off pre-warming in background
