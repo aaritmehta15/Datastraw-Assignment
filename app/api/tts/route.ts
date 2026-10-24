@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { EdgeTTS } from 'memo-node-edge-tts';
-import { randomBytes } from 'crypto';
+import { generateSecMsGec } from '@/lib/secMsGec';
+import { WebSocket } from 'ws';
+import crypto from 'crypto';
 import { normalizeTextForVoice } from '@/lib/voiceNormalizer';
 
 // Must be Node.js runtime
@@ -32,38 +33,57 @@ function escapeXml(unsafe: string): string {
 }
 
 async function synthesize(text: string): Promise<Buffer> {
-  // Clean special characters and parentheses that break SSML parsing
   const cleanText = text
     .replace(/[()]/g, '')
     .replace(/[<>&]/g, ' ')
     .trim();
 
-  const tts = new EdgeTTS({
-    voice: 'en-IN-NeerjaNeural',
-    lang: 'en-IN',
-    outputFormat: 'audio-24khz-48kbitrate-mono-mp3',
-    timeout: 8000,
-  });
-
-  const ws = await (tts as any)._connectWebSocket();
-
   return new Promise<Buffer>((resolve, reject) => {
+    const token = generateSecMsGec('6A5AA1D4EAFF4E9FB37E23D68491D6F4');
+    const connId = crypto.randomUUID().replace(/-/g, '');
+    const url = `wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1?TrustedClientToken=6A5AA1D4EAFF4E9FB37E23D68491D6F4&Sec-MS-GEC=${token}&Sec-MS-GEC-Version=2-143.0.3650.75&ConnectionId=${connId}`;
+
+    const ws = new WebSocket(url, {
+      origin: 'chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br, zstd',
+        Pragma: 'no-cache',
+        'Cache-Control': 'no-cache',
+      },
+    });
+
     const chunks: Buffer[] = [];
     const timeout = setTimeout(() => {
       try { ws.close(); } catch (_) {}
       reject(new Error('TTS_TIMEOUT'));
-    }, 7500);
+    }, 8000);
+
+    ws.on('open', () => {
+      const ts = new Date().toISOString().replace(/[-:.]/g, '').slice(0, -1);
+      ws.send(
+        `X-Timestamp:${ts}\r\nContent-Type:application/json; charset=utf-8\r\nPath:speech.config\r\n\r\n{"context":{"synthesis":{"audio":{"metadataoptions":{"sentenceBoundaryEnabled":"false","wordBoundaryEnabled":"true"},"outputFormat":"audio-24khz-48kbitrate-mono-mp3"}}}}\r\n`,
+      );
+
+      const reqId = crypto.randomUUID().replace(/-/g, '');
+      const voice = 'Microsoft Server Speech Text to Speech Voice (en-IN, NeerjaNeural)';
+      const ssml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'><voice name='${voice}'><prosody pitch='+0Hz' rate='+0%' volume='+0%'>${escapeXml(cleanText)}</prosody></voice></speak>`;
+      ws.send(
+        `X-RequestId:${reqId}\r\nContent-Type:application/ssml+xml\r\nX-Timestamp:${ts}Z\r\nPath:ssml\r\n\r\n${ssml}`,
+      );
+    });
 
     ws.on('message', (data: any, isBinary: boolean) => {
       if (isBinary) {
-        const sep = 'Path:audio\r\n';
-        const idx = data.indexOf(sep);
-        if (idx !== -1) {
-          chunks.push(data.subarray(idx + sep.length));
+        const headerLen = (data[0] << 8) | data[1];
+        const audio = data.slice(2 + headerLen);
+        if (audio.length > 0) {
+          chunks.push(Buffer.isBuffer(audio) ? audio : Buffer.from(audio));
         }
       } else {
-        const msg = data.toString();
-        if (msg.includes('Path:turn.end')) {
+        const str = data.toString();
+        if (str.includes('Path:turn.end')) {
           clearTimeout(timeout);
           try { ws.close(); } catch (_) {}
           resolve(Buffer.concat(chunks));
@@ -76,19 +96,6 @@ async function synthesize(text: string): Promise<Buffer> {
       try { ws.close(); } catch (_) {}
       reject(err);
     });
-
-    const reqId = randomBytes(16).toString('hex');
-    const ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="en-IN">
-  <voice name="en-IN-NeerjaNeural">
-    <prosody rate="default" pitch="default" volume="default">
-      ${escapeXml(cleanText)}
-    </prosody>
-  </voice>
-</speak>`;
-
-    ws.send(
-      `X-RequestId:${reqId}\r\nContent-Type:application/ssml+xml\r\nPath:ssml\r\n\r\n${ssml}`,
-    );
   });
 }
 
